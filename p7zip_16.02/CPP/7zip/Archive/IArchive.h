@@ -400,8 +400,17 @@ SetOperationResult()
   Int32 opRes (NExtract::NOperationResult::kOK)
 */
 
+struct CUpdateInfo
+{
+  UInt32 ChangeHeaderOnly;
+  UInt32 PathStrippedSize;
+  PROPVARIANT PathPrefix;
+  PROPVARIANT Comment;
+};
+
 #define INTERFACE_IArchiveUpdateCallback(x) \
   INTERFACE_IProgress(x); \
+  STDMETHOD(GetUpdateInfo)(struct CUpdateInfo *updateInfo) x; \
   STDMETHOD(GetUpdateItemInfo)(UInt32 index, Int32 *newData, Int32 *newProps, UInt32 *indexInArchive) x; \
   STDMETHOD(GetProperty)(UInt32 index, PROPID propID, PROPVARIANT *value) x; \
   STDMETHOD(GetStream)(UInt32 index, ISequentialInStream **inStream) x; \

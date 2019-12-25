@@ -98,6 +98,8 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
     if (!m_Archive.CanUpdate())
       return E_NOTIMPL;
   }
+  CUpdateInfo updateInfo;
+  RINOK(callback->GetUpdateInfo(&updateInfo));
 
   CObjectVector<CUpdateItem> updateItems;
   bool thereAreAesUpdates = false;
@@ -129,7 +131,9 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
           thereAreAesUpdates = true;
       }
       #ifdef ZIP_HEADER_REBEL
-      else if (!m_HeaderLocale.HasEncodingCharset() && !m_HeaderLocale.HasDecodingCharset())
+      else if (updateInfo.ChangeHeaderOnly &&
+               !m_HeaderLocale.HasEncodingCharset() &&
+               !m_HeaderLocale.HasDecodingCharset())
         nameUnchanged = true;
       #endif
       ui.IndexInArc = indexInArchive;

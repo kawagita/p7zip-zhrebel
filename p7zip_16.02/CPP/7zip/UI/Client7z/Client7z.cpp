@@ -515,6 +515,7 @@ public:
   STDMETHOD(SetCompleted)(const UInt64 *completeValue);
 
   // IUpdateCallback2
+  STDMETHOD(GetUpdateInfo)(struct CUpdateInfo *updateInfo);
   STDMETHOD(GetUpdateItemInfo)(UInt32 index,
       Int32 *newData, Int32 *newProperties, UInt32 *indexInArchive);
   STDMETHOD(GetProperty)(UInt32 index, PROPID propID, PROPVARIANT *value);
@@ -563,6 +564,20 @@ STDMETHODIMP CArchiveUpdateCallback::SetTotal(UInt64 /* size */)
 
 STDMETHODIMP CArchiveUpdateCallback::SetCompleted(const UInt64 * /* completeValue */)
 {
+  return S_OK;
+}
+
+STDMETHOD CArchiveUpdateCallback::GetUpdateInfo(struct CUpdateInfo *updateInfo)
+{
+  if (updateInfo)
+  {
+    updateInfo->ChangeHeaderOnly = BoolToInt(false);
+    updateInfo->PathStrippedSize = 0;
+    NCOM::CPropVariant propPathPrefix;
+    propPathPrefix.Detach(&updateInfo->PathPrefix);
+    NCOM::CPropVariant propComment;
+    propComment.Detach(&updateInfo->Comment);
+  }
   return S_OK;
 }
 

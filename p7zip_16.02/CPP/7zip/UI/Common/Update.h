@@ -120,6 +120,10 @@ struct CUpdateOptions
   CBoolPair SymLinks;
 
   bool DeleteAfterCompressing;
+  bool DeleteAfterPathStripped;
+  UInt32 PathStrippedSize;
+  UString PathPrefix;
+  UString Comment;
 
   bool HeaderChangedOnly;
   NHeaderChangedMode::EEnum HeaderChangedMode;
@@ -143,6 +147,8 @@ struct CUpdateOptions
     PathMode(NWildcard::k_RelatPath),
     
     DeleteAfterCompressing(false),
+    DeleteAfterPathStripped(false),
+    PathStrippedSize(0),
     HeaderChangedOnly(false),
     HeaderChangedMode(NHeaderChangedMode::EEnum::kSetCensorPathHeader),
     SetArcMTime(false)

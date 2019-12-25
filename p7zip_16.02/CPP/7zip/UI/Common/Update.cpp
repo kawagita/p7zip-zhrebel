@@ -620,9 +620,6 @@ static HRESULT Compress(
   }
   else if (options.HeaderChangedOnly)
   {
-    bool setCensorPathHeader = options.HeaderChangedMode == NHeaderChangedMode::EEnum::kSetCensorPathHeader;
-    bool setDirHeaderOnly = options.HeaderChangedMode == NHeaderChangedMode::EEnum::kSetDirectoryHeaderOnly;
-    bool setFileHeaderOnly = options.HeaderChangedMode == NHeaderChangedMode::EEnum::kSetFileHeaderOnly;
     FOR_VECTOR (i, arcItems)
     {
       const CArcItem &ai = arcItems[i];
@@ -668,14 +665,8 @@ static HRESULT Compress(
       else if (updatePairs2[i].NewProps)
         numHeaders++;
     }
-    if (!options.HeaderChangedOnly)
-    {
-      RINOK(callback->SetNumItems(numItems));
-    }
-    else
-    {
-      RINOK(callback->SetNumHeaders(numHeaders));
-    }
+    RINOK(options.HeaderChangedOnly ?
+          callback->SetNumHeaders(numHeaders) : callback->SetNumItems(numItems));
   }
   
   CArchiveUpdateCallback *updateCallbackSpec = new CArchiveUpdateCallback;
@@ -698,11 +689,17 @@ static HRESULT Compress(
   updateCallbackSpec->StoreHardLinks = options.HardLinks.Val;
   updateCallbackSpec->StoreSymLinks = options.SymLinks.Val;
 
+  updateCallbackSpec->StoreSymLinks = options.SymLinks.Val;
+
   updateCallbackSpec->Arc = arc;
   updateCallbackSpec->ArcItems = &arcItems;
   updateCallbackSpec->UpdatePairs = &updatePairs2;
 
-  updateCallbackSpec->ProcessedItemsStatuses = processedItemsStatuses;
+  updateCallbackSpec->PathStrippedSize = options.PathStrippedSize;
+  updateCallbackSpec->PathPrefix = options.PathPrefix;
+  updateCallbackSpec->Comment = options.Comment;
+
+  updateCallbackSpec->ChangeHeaderOnly = options.HeaderChangedOnly;
 
   if (options.RenamePairs.Size() != 0)
     updateCallbackSpec->NewNames = &newNames;

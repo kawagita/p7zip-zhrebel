@@ -130,6 +130,11 @@ public:
   bool StoreHardLinks;
   bool StoreSymLinks;
 
+  bool ChangeHeaderOnly;
+  UInt32 PathStrippedSize;
+  UString PathPrefix;
+  UString Comment;
+
   Byte *ProcessedItemsStatuses;
 
 

@@ -61,6 +61,9 @@ CArchiveUpdateCallback::CArchiveUpdateCallback():
     StoreHardLinks(false),
     StoreSymLinks(false),
     
+    ChangeHeaderOnly(false),
+    PathStrippedSize(0),
+    
     ProcessedItemsStatuses(NULL)
 {
   #ifdef _USE_SECURITY_CODE
@@ -109,6 +112,23 @@ STDMETHODIMP CArchiveUpdateCallback::EnumProperties(IEnumSTATPROPSTG **)
   return CStatPropEnumerator::CreateEnumerator(kProps, ARRAY_SIZE(kProps), enumerator);
 }
 */
+
+STDMETHODIMP CArchiveUpdateCallback::GetUpdateInfo(struct CUpdateInfo *updateInfo)
+{
+  if (updateInfo)
+  {
+    updateInfo->ChangeHeaderOnly = BoolToInt(ChangeHeaderOnly);
+    updateInfo->PathStrippedSize = PathStrippedSize;
+    NCOM::CPropVariant propPathPrefix;
+    if (!PathPrefix.IsEmpty())
+      propPathPrefix = PathPrefix;
+    propPathPrefix.Detach(&updateInfo->PathPrefix);
+    NCOM::CPropVariant propComment;
+    if (!Comment.IsEmpty())
+      propComment = Comment;
+    propComment.Detach(&updateInfo->Comment);
+  }
+}
 
 STDMETHODIMP CArchiveUpdateCallback::GetUpdateItemInfo(UInt32 index,
       Int32 *newData, Int32 *newProps, UInt32 *indexInArchive)
