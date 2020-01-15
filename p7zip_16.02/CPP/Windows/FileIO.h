@@ -22,6 +22,31 @@
 
 #define _my_SYMLINK_FLAG_RELATIVE 1
 
+#ifndef _STAT_ATIM
+#define st_birthtim st_birthtimespec
+#define st_ctim st_ctimespec
+#define st_mtim st_mtimespec
+#define st_atim st_atimespec
+#endif
+
+#ifdef USE_NANO_SECONDS
+#ifdef ENV_HAVE_BIRTHTIME
+#define STAT_CTIME(st) (st).st_birthtim
+#else
+#define STAT_CTIME(st) (st).st_ctim
+#endif
+#define STAT_MTIME(st) (st).st_mtim
+#define STAT_ATIME(st) (st).st_atim
+#else
+#ifdef ENV_HAVE_BIRTHTIME
+#define STAT_CTIME(st) (st).st_birthtim.tv_sec
+#else
+#define STAT_CTIME(st) (st).st_ctime
+#endif
+#define STAT_MTIME(st) (st).st_mtime
+#define STAT_ATIME(st) (st).st_atime
+#endif
+
 namespace NWindows {
 namespace NFile {
 
@@ -52,8 +77,8 @@ class CFileBase
 protected:
   int     _fd;
   AString _unix_filename;
-  time_t   _lastAccessTime;
-  time_t   _lastWriteTime;
+  TIMESPEC _lastAccessTime;
+  TIMESPEC _lastWriteTime;
 #ifdef ENV_HAVE_LSTAT
   int     _size;
   char    _buffer[MAX_PATHNAME_LEN+1];
@@ -85,6 +110,7 @@ public:
   bool Open(CFSTR fileName,bool ignoreSymbolicLink=false);
   bool ReadPart(void *data, UINT32 size, UINT32 &processedSize);
   bool Read(void *data, UINT32 size, UINT32 &processedSize);
+  bool ReadSymLink(UString &linkName);
 };
 
 class COutFile: public CFileBase

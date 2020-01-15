@@ -138,13 +138,13 @@ const unsigned k_UnixTimeExtra_OnlyModTimeLength = 1 + k_UnixTimeExtra_EpochTime
 struct CUnixTimeExtra
 {
 public:
-  Int64 EpochTimes[NFileHeader::NUnixTime::kNumFields];
-  bool IsTimePresent[NFileHeader::NUnixTime::kNumFields];
+  Int64 EpochTimes[TS_PARSIZE];
+  bool IsTimePresent[TS_PARSIZE];
 
 private:
   void InitTimeFields()
   {
-    for (unsigned i = 0; i < NFileHeader::NUnixTime::kNumFields; i++)
+    for (unsigned i = 0; i < TS_PARSIZE; i++)
     {
       EpochTimes[i] = -1;
       IsTimePresent[i] = false;
@@ -156,6 +156,28 @@ public:
 
   bool ParseFromSubBlock(const CExtraSubBlock &sb);
   void SetSubBlock(CExtraSubBlock &sb, bool toLocal) const;
+};
+
+const unsigned k_UnixFileOwnershipExtra_OwnerIDLength = 4;
+const unsigned k_UnixFileOwnershipExtra_DataBlockLength = 1 + (1 + k_UnixFileOwnershipExtra_OwnerIDLength) * OWNER_PARSIZE;
+
+struct CUnixFileOwnershipExtra
+{
+public:
+  UInt32 OwnerIDs[OWNER_PARSIZE];
+
+private:
+  void InitIDFields()
+  {
+    for (unsigned i = 0; i < OWNER_PARSIZE; i++)
+      OwnerIDs[i] = 0;
+  }
+
+public:
+  CUnixFileOwnershipExtra() { InitIDFields(); }
+
+  bool ParseFromSubBlock(const CExtraSubBlock &sb);
+  void SetSubBlock(CExtraSubBlock &sb) const;
 };
 #endif
 
@@ -218,6 +240,14 @@ struct CExtraBlock
   }
   #else
   bool GetUnixTime(CUnixTimeExtra &e) const
+  {
+    FOR_VECTOR (i, SubBlocks)
+      if (e.ParseFromSubBlock(SubBlocks[i]))
+        return true;
+    return false;
+  }
+
+  bool GetUnixFileOwnership(CUnixFileOwnershipExtra &e) const
   {
     FOR_VECTOR (i, SubBlocks)
       if (e.ParseFromSubBlock(SubBlocks[i]))
@@ -306,6 +336,9 @@ public:
   UInt16 InternalAttrib;
   UInt32 ExternalAttrib;
   
+  UInt32 UID;
+  UInt32 GID;
+
   UInt64 LocalHeaderPos;
   
   CExtraBlock CentralExtra;
@@ -328,7 +361,11 @@ public:
   const CExtraBlock &GetMainExtra() const { return *(FromCentral ? &CentralExtra : &LocalExtra); }
 
   bool IsDir() const;
-  UInt32 GetWinAttrib() const;
+  UInt32 GetWinAttrib(
+      #ifdef ZIP_HEADER_REBEL
+      UInt16 fileInfoType
+      #endif
+      ) const;
   bool GetPosixAttrib(UInt32 &attrib) const;
 
   Byte GetHostOS() const { return FromCentral ? MadeByVersion.HostOS : ExtractVersion.HostOS; }

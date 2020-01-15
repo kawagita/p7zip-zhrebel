@@ -22,20 +22,9 @@ bool GetFileTimeSince1601(unsigned year, unsigned month, unsigned day,
 void GetCurUtcFileTime(FILETIME &ft) throw();
 void AddOffsetSecondsToFileTime(Int32 offset, FILETIME &fileTime) throw();
 
-#ifdef UNIX_USE_WIN_TIME
-typedef struct _SYSTEMTIME2
-{
-  WORD wYear;
-  WORD wMonth;
-  WORD wDay;
-  WORD wHour;
-  WORD wMinute;
-  WORD wSecond;
-  DWORD dwNanoSeconds;
-} SYSTEMTIME2;
-
+void TimespecToFileTime(const TIMESPEC &ts, FILETIME &fileTime) throw();
+bool FileTimeToTimespec(const FILETIME &fileTime, TIMESPEC &ts) throw();
 bool FileTimeToSystemTime2(const FILETIME &fileTime, SYSTEMTIME2 &systemTime) throw();
-#endif
 
 }}
 

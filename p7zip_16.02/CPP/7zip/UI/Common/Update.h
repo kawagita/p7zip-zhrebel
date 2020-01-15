@@ -150,7 +150,7 @@ struct CUpdateOptions
     DeleteAfterPathStripped(false),
     PathStrippedSize(0),
     HeaderChangedOnly(false),
-    HeaderChangedMode(NHeaderChangedMode::EEnum::kSetCensorPathHeader),
+    HeaderChangedMode(NHeaderChangedMode::kSetCensorPathHeader),
     SetArcMTime(false)
 
       {};

@@ -876,21 +876,46 @@ static void SetMethodOptions(const CParser &parser, CObjectVector<CProperty> &pr
   }
 }
 
-static const UString kLocaleParamNames[] = { UString(L"de"), UString(L"en") };
-static const UString kTimestampParamNames[] = { UString(L"tm"), UString(L"ta"), UString(L"tc") };
+namespace NHeaderPropName {
+const wchar_t *kInitialization = L"init";
+const wchar_t *kLocale = L"lc";
+const wchar_t *kDecodingComment = L"dc";
+const wchar_t *kTimeType = L"t";
+const wchar_t *kTimeZone = L"tz";
+const wchar_t *kTimestampFromModTime = L"tfm";
+const wchar_t *kTimestamp = L"ft";
+const wchar_t *kFileInfoType = L"f";
+const wchar_t *kFileInfoIzMode = L"iz";
+const wchar_t *kFileAttrib = L"attrib";
+const wchar_t *kFilePermissions = L"mod";
+const wchar_t *kFileOwnership = L"own";
+const wchar_t *kExtendedData = L"ex";
+const wchar_t *kExtendedDataAdded = L"exa";
+const wchar_t *kExtendedDataDeleted = L"exd";
+}
+
+static const wchar_t *kLocaleParamNames[] = { L"de", L"en" };
+static const wchar_t *kTimestampParamNames[] = { L"tm", L"ta", L"tc" };
+static const wchar_t *kFileOwnershipParamNames[] = { L"uid", L"gid" };
 
 static const CHeaderPropertyForm kHeaderPropertyForms[] =
 {
-  { L"lc", HT_LOCALE, kLocaleParamNames, LC_PARSIZE },
-  { L"ts", HT_TIMESTAMP, kTimestampParamNames, TS_PARSIZE },
-  { L"tz", HT_TIME_ZONE, NULL, 0 }
-  #ifdef ZIP_HEADER_REBEL
-  , { L"dc", HT_LOCALE, NULL, 0 }
-  , { L"t", HT_TIME_INFORMATION, NULL, 0 }
-  , { L"ex", HT_EXTENDED_DATA_SWITCH, NULL, 0 }
-  , { L"exa", HT_EXTENDED_DATA, NULL, 0 }
-  , { L"exd", HT_EXTENDED_DATA, NULL, 0 }
-  #endif
+  { NHeaderPropName::kInitialization, HT_EXTENDED_DATA_SWITCH, 0 },
+  { NHeaderPropName::kLocale, HT_LOCALE, ARRAY_SIZE(kLocaleParamNames), kLocaleParamNames, HT_LOCALE },
+  { NHeaderPropName::kDecodingComment, HT_LOCALE, 0 },
+  { NHeaderPropName::kTimeType, HT_TIME_INFORMATION, 0 },
+  { NHeaderPropName::kTimeZone, HT_TIME_ZONE, 0 },
+  { NHeaderPropName::kTimestampFromModTime, HT_EXTENDED_DATA_SWITCH, 0 },
+  { NHeaderPropName::kTimestamp, HT_NOTHING, ARRAY_SIZE(kTimestampParamNames), kTimestampParamNames, HT_TIMESTAMP },
+  { NHeaderPropName::kFileInfoType, HT_FILE_INFORMATION, 0 },
+  { NHeaderPropName::kFileInfoIzMode, HT_EXTENDED_DATA_SWITCH, 0 },
+  { NHeaderPropName::kFileAttrib, HT_FILE_ATTRIBUTE, 0 },
+  { NHeaderPropName::kFilePermissions, HT_FILE_PERMISSIONS, 0 },
+  { NHeaderPropName::kFileOwnership, HT_EXTENDED_DATA_SWITCH,
+    ARRAY_SIZE(kFileOwnershipParamNames), kFileOwnershipParamNames, HT_FILE_OWNERSHIP },
+  { NHeaderPropName::kExtendedData, HT_EXTENDED_DATA_SWITCH, 0 },
+  { NHeaderPropName::kExtendedDataAdded, HT_EXTENDED_DATA, 0 },
+  { NHeaderPropName::kExtendedDataDeleted, HT_EXTENDED_DATA, 0 }
 };
 
 static void SetHeaderOptions(const CParser &parser, CObjectVector<CHeaderProperty> &properties)
@@ -910,7 +935,7 @@ static void SetHeaderOptions(const CParser &parser, CObjectVector<CHeaderPropert
         prop.Name.DeleteFrom(index);
       }
       if (!propParser->ParseHeaderParameter(prop))
-        throw CArcCmdLineException("Incorrect header parameter:", prop.Value);
+        throw CArcCmdLineException("Incorrect header parameter:", parser[NKey::kHeaderProperty].PostStrings[i]);
     }
   }
 }
@@ -1354,14 +1379,14 @@ void CArcCmdLineParser::Parse2(CArcCmdLineOptions &options)
     {
       if (options.Censor.CensorPaths.IsEmpty())
       {
-        updateOptions.HeaderChangedMode = NHeaderChangedMode::EEnum::kSetAllHeaders;
+        updateOptions.HeaderChangedMode = NHeaderChangedMode::kSetAllHeaders;
         if (parser[NKey::kUpdateDirectoryHeaderOnly].ThereIs)
         {
           if (!parser[NKey::kUpdateFileHeaderOnly].ThereIs)
-            updateOptions.HeaderChangedMode = NHeaderChangedMode::EEnum::kSetDirectoryHeaderOnly;
+            updateOptions.HeaderChangedMode = NHeaderChangedMode::kSetDirectoryHeaderOnly;
         }
         else if (parser[NKey::kUpdateFileHeaderOnly].ThereIs)
-          updateOptions.HeaderChangedMode = NHeaderChangedMode::EEnum::kSetFileHeaderOnly;
+          updateOptions.HeaderChangedMode = NHeaderChangedMode::kSetFileHeaderOnly;
       }
       updateOptions.HeaderChangedOnly = true;
     }

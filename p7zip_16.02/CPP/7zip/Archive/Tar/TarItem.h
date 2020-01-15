@@ -42,6 +42,9 @@ struct CItem
 
   bool IsSymLink() const { return LinkFlag == NFileHeader::NLinkFlag::kSymLink && (Size == 0); }
   bool IsHardLink() const { return LinkFlag == NFileHeader::NLinkFlag::kHardLink; }
+  bool IsCharacter() const { return LinkFlag == NFileHeader::NLinkFlag::kCharacter; }
+  bool IsBlock() const { return LinkFlag == NFileHeader::NLinkFlag::kBlock; }
+  bool IsFIFO() const { return LinkFlag == NFileHeader::NLinkFlag::kFIFO; }
   bool IsSparse() const { return LinkFlag == NFileHeader::NLinkFlag::kSparse; }
   UInt64 GetUnpackSize() const { return IsSymLink() ? LinkName.Len() : Size; }
   bool IsPaxExtendedHeader() const

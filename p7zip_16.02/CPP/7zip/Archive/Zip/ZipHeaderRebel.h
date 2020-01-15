@@ -8,33 +8,42 @@
 namespace NArchive {
 namespace NZip {
 
-static const CObjectVector<UInt16> kExtraNoExclusiveIDs;
-
 class CHeaderExtraStorage
 {
 private:
-  bool m_HasWzAesField;
-  CWzAesExtra m_WzAesField;
   CUnixTimeExtra m_UnixTimeField;
+  CUnixFileOwnershipExtra m_UnixFileOwnershipField;
+  CWzAesExtra m_WzAesField;
+
+  bool m_StoreUnixFileOwnershipField;
+  bool m_HasWzAesField;
 
   CExtraBlock m_LocalExtraUnknown;
   CExtraBlock m_CentralExtraUnknown;
 
 public:
-  CHeaderExtraStorage(): m_HasWzAesField(false) {}
+  CHeaderExtraStorage(): m_StoreUnixFileOwnershipField(false), m_HasWzAesField(false) {}
 
   UInt32 GetLocalExtraSize(const CItemOut &item) const;
 
   void SetUnixTimeExtra(UInt32 index, UInt32 epochTime)
   {
-    if (index >= 0 && index < NFileHeader::NUnixTime::kNumFields)
+    if (index >= 0 && index < TS_PARSIZE)
     {
       m_UnixTimeField.EpochTimes[index] = epochTime;
       m_UnixTimeField.IsTimePresent[index] = true;
     }
   }
 
-  void CopyExtraSubBlocks(const CItem &item, const CObjectVector<UInt16> &exclusiveIDs, bool copyAll);
+  void SetUnixFileOwnershipExtra(UInt32 uid, UInt32 gid)
+  {
+    m_UnixFileOwnershipField.OwnerIDs[OWNER_UID] = uid;
+    m_UnixFileOwnershipField.OwnerIDs[OWNER_GID] = gid;
+    m_StoreUnixFileOwnershipField = true;
+  }
+
+  void CopyExtraSubBlocks(const CItem &item,
+      const CObjectVector<UInt16> &exclusiveIDs, bool copyAll, bool copyUnixFileOwnership);
 
   void RestoreExtraSubBlocks(CItemOut &item) const;
   void RestoreExtraWzAes(CItemOut &item) const;
@@ -45,38 +54,34 @@ class CHeaderRebel
 private:
   CHeaderLocale *m_HeaderLocale;
 
-  UInt32 m_TimeType;
+  UInt16 m_FileTimeType;
+  UInt16 m_FileInfoType;
+  UInt16 m_FileAttribSettingMask;
+  UInt16 m_FileAttribUnsettingMask;
+  UInt16 m_UnixModeBits;
+  mode_t _UnixModeMask;
 
-  bool m_WriteExtraAll;
+  bool m_SetTimestampFromModTime;
+  bool m_SetIzAttrib;
+  bool m_SetUnixModeBits;
+  bool m_SetUnixFileOwnership;
+  bool m_CopyUnixFileOwnership;
+  bool m_CopyExtraAll;
   const CObjectVector<UInt16> *m_ExtraExclusiveIDs;
 
 public:
-  CHeaderRebel(CHeaderLocale *headerLocale, UInt32 timeType, const CObjectVector<UInt16> *extraAddedIDs)
-  {
-    m_HeaderLocale = headerLocale;
-    m_TimeType = timeType;
-    m_WriteExtraAll = false;
-    if (extraAddedIDs != NULL)
-      m_ExtraExclusiveIDs = extraAddedIDs;
-    else
-      m_ExtraExclusiveIDs = &kExtraNoExclusiveIDs;
-  }
-
-  void SwitchWriteExtraAll(const CObjectVector<UInt16> *extraDeletedIDs)
-  {
-    m_WriteExtraAll = true;
-    if (extraDeletedIDs != NULL)
-      m_ExtraExclusiveIDs = extraDeletedIDs;
-    else
-      m_ExtraExclusiveIDs = &kExtraNoExclusiveIDs;
-  }
+  CHeaderRebel(
+      CHeaderLocale *headerLocale,
+      UInt16 timeType,
+      UInt16 headerInfoType,
+      const CFileHeaderInfo &headerInfo);
 
   void SetLocalHeaderLocale(CItemOut &item);
-  void ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraStorage);
+  void ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraStorage) const;
 
-  void BackupHeaderExtra(const CItem &item, CHeaderExtraStorage &extraStorage)
+  void BackupHeaderExtra(const CItem &item, CHeaderExtraStorage &extraStorage) const
   {
-    extraStorage.CopyExtraSubBlocks(item, *m_ExtraExclusiveIDs, m_WriteExtraAll);
+    extraStorage.CopyExtraSubBlocks(item, *m_ExtraExclusiveIDs, m_CopyExtraAll, m_CopyUnixFileOwnership);
   }
 };
 

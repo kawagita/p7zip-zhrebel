@@ -37,6 +37,8 @@ static const char * const kPropIdToName[] =
   , "Folder"
   , "Size"
   , "Packed Size"
+  , "UID"
+  , "GID"
   , "Attributes"
   , "Created"
   , "Accessed"
@@ -140,13 +142,13 @@ static const char *kError = "ERROR: ";
 
 static void GetAttribString(UInt32 wa, bool isDir, bool allAttribs, char *s)
 {
-  if (isDir)
-    wa |= FILE_ATTRIBUTE_DIRECTORY;
   if (allAttribs)
   {
     ConvertWinAttribToString(s, wa);
     return;
   }
+  if (isDir)
+    wa |= FILE_ATTRIBUTE_DIRECTORY;
   s[0] = ((wa & FILE_ATTRIBUTE_DIRECTORY) != 0) ? 'D': kEmptyAttribChar;
   s[1] = ((wa & FILE_ATTRIBUTE_READONLY)  != 0) ? 'R': kEmptyAttribChar;
   s[2] = ((wa & FILE_ATTRIBUTE_HIDDEN)    != 0) ? 'H': kEmptyAttribChar;

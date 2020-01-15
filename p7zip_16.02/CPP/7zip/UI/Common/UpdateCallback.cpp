@@ -115,6 +115,7 @@ STDMETHODIMP CArchiveUpdateCallback::EnumProperties(IEnumSTATPROPSTG **)
 
 STDMETHODIMP CArchiveUpdateCallback::GetUpdateInfo(struct CUpdateInfo *updateInfo)
 {
+  COM_TRY_BEGIN
   if (updateInfo)
   {
     updateInfo->ChangeHeaderOnly = BoolToInt(ChangeHeaderOnly);
@@ -128,6 +129,8 @@ STDMETHODIMP CArchiveUpdateCallback::GetUpdateInfo(struct CUpdateInfo *updateInf
       propComment = Comment;
     propComment.Detach(&updateInfo->Comment);
   }
+  return S_OK;
+  COM_TRY_END
 }
 
 STDMETHODIMP CArchiveUpdateCallback::GetUpdateItemInfo(UInt32 index,
@@ -432,11 +435,15 @@ STDMETHODIMP CArchiveUpdateCallback::GetProperty(UInt32 index, PROPID propID, PR
       case kpidPath:  prop = DirItems->GetLogPath(up.DirIndex); break;
       case kpidIsDir:  prop = di.IsDir(); break;
       case kpidSize:  prop = di.IsDir() ? (UInt64)0 : di.Size; break;
+      case kpidUID:  prop = di.UID; break;
+      case kpidGID:  prop = di.GID; break;
       case kpidAttrib:  prop = di.Attrib; break;
       case kpidCTime:  prop = di.CTime; break;
       case kpidATime:  prop = di.ATime; break;
       case kpidMTime:  prop = di.MTime; break;
       case kpidIsAltStream:  prop = di.IsAltStream; break;
+      case kpidPosixAttrib:  prop = di.Attrib >> 16; break;
+      case kpidSymLink:  prop = DirItems->GetSymLink(up.DirIndex); break;
       #if defined(_WIN32) && !defined(UNDER_CE)
       // case kpidShortName:  prop = di.ShortName; break;
       #endif

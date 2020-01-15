@@ -12,6 +12,50 @@
 using namespace NWindows;
 using namespace NCOM;
 
+static const wchar_t kMinDigit = L'0';
+static const wchar_t kMaxDigit = L'9';
+static const wchar_t kMinOctalDigit = L'0';
+static const wchar_t kMaxOctalDigit = L'7';
+static const wchar_t kMinHexCaptial = L'A';
+static const wchar_t kMaxHexCaptial = L'F';
+static const wchar_t kMinHexSmall = L'a';
+static const wchar_t kMaxHexSmall = L'f';
+
+static bool ParseWCharToNumber(wchar_t c, UInt32 &res, UInt32 radix = 10)
+{
+  switch (radix)
+  {
+    case 16:
+      if (c >= kMinHexCaptial && c <= kMaxHexCaptial)
+      {
+        res = c - kMinHexCaptial;
+        return true;
+      }
+      else if (c >= kMinHexSmall && c <= kMaxHexSmall)
+      {
+        res = c - kMinHexSmall;
+        return true;
+      }
+    case 10:
+      if (c < kMinDigit || c > kMaxDigit)
+        break;
+      res = c - kMinDigit;
+      return true;
+    case 8:
+      if (c < kMinOctalDigit || c > kMaxOctalDigit)
+        break;
+      res = c - kMinOctalDigit;
+      return true;
+  }
+  res = 0;
+  return false;
+}
+
+static const wchar_t kMinAlphaCaptial = L'A';
+static const wchar_t kMaxAlphaCaptial = L'Z';
+static const wchar_t kMinAlphaSmall = L'a';
+static const wchar_t kMaxAlphaSmall = L'z';
+
 enum
 {
   kLocaleLanguage = 0,
@@ -62,13 +106,12 @@ static bool ParseFromLocaleFormat(const UString s, UString &res)
         }
         return false;
       default:
-        if (c < L'-'
-            || (c > L'-' && c < L'0')
-            || (c > L'9' && c < L'A')
-            || (c > L'Z' && c < L'a')
-            || c > L'z')
-          return false;
-        break;
+        if (c == L'-' ||
+            (c >= kMinDigit && c <= kMaxDigit) ||
+            (c >= kMinAlphaCaptial && c <= kMaxAlphaCaptial) ||
+            (c >= kMinAlphaSmall && c <= kMaxAlphaSmall))
+          break;
+        return false;
     }
     readLength[readPos]++;
   }
@@ -108,21 +151,9 @@ static const unsigned kTimestampSecondsLength = 2;
 static const unsigned kTimestampISO8601DateTimeLength = kTimestampDateTimeLength + kTimestampSecondsLength + 5;
 static const unsigned kTimestamp100NanoSecondsLength = 7;
 
-static const wchar_t kTimestampMinDigit = L'0';
-static const wchar_t kTimestampMaxDigit = L'9';
 static const wchar_t kTimestampISO8601TimeSeparator = L':';
 static const wchar_t kTimestampISO8601Separators[] = { 0, L'-', L'-', L'T', kTimestampISO8601TimeSeparator };
 static const wchar_t kTimestampSecondSeparator = L'.';
-
-static bool ParseTimestampDigit(wchar_t c, unsigned &t)
-{
-  if (c >= kTimestampMinDigit && c <= kTimestampMaxDigit)
-  {
-    t = (unsigned)(c - kTimestampMinDigit);
-    return true;
-  }
-  return false;
-}
 
 static bool ParseFromTimestampFormat(const UString s, FILETIME &res)
 {
@@ -148,7 +179,7 @@ static bool ParseFromTimestampFormat(const UString s, FILETIME &res)
       unsigned sec = 0;
       if (*p != 0)
       {
-        if (!ParseTimestampDigit(*p, sec))
+        if (!ParseWCharToNumber(*p, sec))
           return false;
         p++;
       }
@@ -157,7 +188,7 @@ static bool ParseFromTimestampFormat(const UString s, FILETIME &res)
     while (*p != 0)
     {
       unsigned sec;
-      if (!ParseTimestampDigit(*p++, sec))
+      if (!ParseWCharToNumber(*p++, sec))
         return false;
     }
     dateTimeStr.DeleteFrom(secSeparatorPos);
@@ -181,7 +212,7 @@ static bool ParseFromTimestampFormat(const UString s, FILETIME &res)
     {
       dt[i] *= 10;
       unsigned t;
-      if (dateTimeLen <= 0 || !ParseTimestampDigit(*p++, t))
+      if (dateTimeLen <= 0 || !ParseWCharToNumber(*p++, t))
         return false;
       dt[i] += t;
       dateTimeLen--;
@@ -198,7 +229,7 @@ static bool ParseFromTimestampFormat(const UString s, FILETIME &res)
     {
       seconds *= 10;
       unsigned sec;
-      if (!ParseTimestampDigit(*p++, sec))
+      if (!ParseWCharToNumber(*p++, sec))
         return false;
       seconds += sec;
     }
@@ -240,7 +271,7 @@ static bool ParseFromTimeZoneFormat(const UString s, Int32 &res)
     {
       time *= 10;
       unsigned t;
-      if (!ParseTimestampDigit(*p++, t))
+      if (!ParseWCharToNumber(*p++, t))
         return false;
       time += t;
     }
@@ -250,63 +281,92 @@ static bool ParseFromTimeZoneFormat(const UString s, Int32 &res)
   return true;
 }
 
-static const wchar_t kDataMinDigit = L'0';
-static const wchar_t kDataMaxDigit = L'9';
-static const wchar_t kDataMinHexCaptial = L'A';
-static const wchar_t kDataMaxHexCaptial = L'F';
-static const wchar_t kDataMinHexSmall = L'a';
-static const wchar_t kDataMaxHexSmall = L'f';
-
-static bool DataWCharToUInt(wchar_t c, UInt32 radix, UInt32 &res)
+static bool ParseFromFileAttribute(const UString s, int &index, wchar_t &c, unsigned &len)
 {
-  if (c >= kDataMinDigit && c <= kDataMaxDigit)
+  const wchar_t *p = s.Ptr();
+  bool setting = true;
+  len = 0;
+  switch (*p)
   {
-    res = (UInt32)(c - kDataMinDigit);
+    case L'-':
+      setting = false;
+    case L'+':
+      if (setting)
+        index = ATTR_SETTING;
+      else
+        index = ATTR_UNSETTING;
+      len++;
+      p++;
+      break;
+    default:
+      if (index < 0)
+        return false;
+      break;
+  }
+  if ((*p >= kMinDigit && *p <= kMaxDigit) ||
+      (*p >= kMinAlphaCaptial && *p <= kMaxAlphaCaptial) ||
+      (*p >= kMinAlphaSmall && *p <= kMaxAlphaSmall))
+  {
+    c = *p;
+    len++;
     return true;
   }
-  else if (radix > 10)
-  {
-    if (c >= kDataMinHexCaptial && c <= kDataMaxHexCaptial)
-    {
-      res = (UInt32)(c - kDataMinHexCaptial);
-      return true;
-    }
-    else if (c >= kDataMinHexSmall && c <= kDataMaxHexSmall)
-    {
-      res = (UInt32)(c - kDataMinHexSmall);
-      return true;
-    }
-  }
-  res = 0;
   return false;
 }
 
-static bool ParseFromDataFormat(const UString s, UInt64 &res, unsigned &len)
+static bool ParseFromFilePermissions(const UString s, UInt32 &res)
 {
-  UInt64 data = 0;
-  UInt32 radix = 10;
-  if (s[0] == L'0' && s[1] == L'x')
+  const wchar_t *p = s.Ptr();
+  UInt64 num = 0;
+  UInt32 oct;
+  while (ParseWCharToNumber(*p++, oct, 8))
   {
-    radix = 16;
-    len = 2;
+    num = (num << 3) + oct;
+    if (num > 0xFFFFFFFF)
+      return false;
   }
-  else
-    len = 0;
-  const wchar_t *p = s.Ptr(len);
-  UInt32 val;
-  if (!DataWCharToUInt(*p++, radix, val))
+  if (*p != 0)
     return false;
-  do
-  {
-    len++;
-    data += val;
-    if (data > 0xFFFFFFFF || !DataWCharToUInt(*p++, radix, val))
-      break;
-    data *= radix;
-  }
-  while (1);
-  res = data;
+  res = num;
   return true;
+}
+
+static bool ParseFromNumberFormat(const UString s, UInt32 &res, unsigned &len)
+{
+  const wchar_t *p = s.Ptr();
+  UInt64 num = 0;
+  UInt32 d;
+  len = 0;
+  while (ParseWCharToNumber(*p++, d))
+  {
+    num = num * 10 + d;
+    if (num > 0xFFFFFFFF)
+      return false;
+    len++;
+  }
+  res = num;
+  return len > 0;
+}
+
+static bool ParseFromDataFormat(const UString s, UInt32 &res, unsigned &len)
+{
+  if (s.Len() >= 2 && s[0] == L'0' && s[1] == L'x')
+  {
+    const wchar_t *p = s.Ptr(2);
+    UInt64 num = 0;
+    UInt32 hex;
+    len = 2;
+    while (ParseWCharToNumber(*p++, hex, 16))
+    {
+      num = (num << 4) + hex;
+      if (num > 0xFFFFFFFF)
+        return false;
+      len++;
+    }
+    res = num;
+    return len > 2;
+  }
+  return ParseFromNumberFormat(s, res, len);
 }
 
 static bool ParseFromSwitchFormat(const UString s, CBoolPair &res)
@@ -325,6 +385,11 @@ void CHeaderData::SetIntValue(Int32 intVal, int index)
 }
 
 void CHeaderData::SetUIntValue(UInt32 intVal, int index)
+{
+  throw CSystemException(E_NOTIMPL);
+}
+
+void CHeaderData::SetCharValue(wchar_t c, int index)
 {
   throw CSystemException(E_NOTIMPL);
 }
@@ -363,7 +428,7 @@ struct CLocaleData: public CHeaderData
 {
   UString Locales[LC_PARSIZE];
 
-  CLocaleData() { }
+  CLocaleData() {}
 
   void SetStringValue(const UString strVal, int index)
   {
@@ -390,16 +455,13 @@ struct CLocaleData: public CHeaderData
 
 struct CTimestampData: public CHeaderData
 {
-  bool HasFileTimes[TS_PARSIZE];
+  bool SetTimestamp[TS_PARSIZE];
   FILETIME FileTimes[TS_PARSIZE];
 
   CTimestampData()
   {
     for (unsigned i = 0; i < TS_PARSIZE; i++)
-    {
-      HasFileTimes[i] = false;
-      FileTimes[i].dwLowDateTime = FileTimes[i].dwHighDateTime = 0;
-    }
+      SetTimestamp[i] = false;
   }
 
   void SetFileTimeValue(const FILETIME &filetime, int index)
@@ -408,13 +470,13 @@ struct CTimestampData: public CHeaderData
     {
       for (unsigned i = 0; i < TS_PARSIZE; i++)
       {
-        HasFileTimes[i] = true;
+        SetTimestamp[i] = true;
         FileTimes[i] = filetime;
       }
     }
     else if (index < TS_PARSIZE)
     {
-      HasFileTimes[index] = true;
+      SetTimestamp[index] = true;
       FileTimes[index] = filetime;
     }
   }
@@ -426,7 +488,7 @@ struct CTimestampData: public CHeaderData
   {
     if (index < 0 || index >= TS_PARSIZE)
       throw CSystemException(E_FAIL);
-    else if (HasFileTimes[index])
+    else if (SetTimestamp[index])
       value = FileTimes[index];
   }
 };
@@ -464,11 +526,87 @@ struct CTimeZoneData: public CHeaderData
   }
 };
 
+struct CFileAttributeData: public CHeaderData
+{
+  UString AttrChars[ATTR_PARSIZE];
+
+  CFileAttributeData() {}
+
+  void SetCharValue(wchar_t c, int index)
+  {
+    if (index >= 0 && index < ATTR_PARSIZE)
+      AttrChars[index] += c;
+  }
+
+  PARTYPE GetValueType() const { return VT_BSTR; }
+  PARSIZE GetValueSize() const { return ATTR_PARSIZE; }
+
+  void GetValue(CPropVariant &value, int index) const
+  {
+    if (index < 0 || index >= ATTR_PARSIZE)
+      throw CSystemException(E_FAIL);
+    else if (!AttrChars[index].IsEmpty())
+      value = AttrChars[index];
+  }
+};
+
+struct CFilePermissionsData: public CHeaderData
+{
+  UInt32 Mode;
+
+  CFilePermissionsData() {}
+
+  void SetUIntValue(UInt32 uintVal, int index) { Mode = uintVal; }
+
+  PARTYPE GetValueType() const { return VT_UI4; }
+  PARSIZE GetValueSize() const { return 1; }
+
+  void GetValue(CPropVariant &value, int index) const
+  {
+    if (index < 0 || index >= 1)
+      throw CSystemException(E_FAIL);
+    else
+      value = Mode;
+  }
+};
+
+struct CFileOwnershipData: public CHeaderData
+{
+  bool SetFileOwnership[OWNER_PARSIZE];
+  UInt32 OwnerIDs[OWNER_PARSIZE];
+
+  CFileOwnershipData()
+  {
+    for (unsigned i = 0; i < OWNER_PARSIZE; i++)
+      SetFileOwnership[i] = false;
+  }
+
+  void SetUIntValue(UInt32 uintVal, int index)
+  {
+    if (index >= 0 && index < OWNER_PARSIZE)
+    {
+      SetFileOwnership[index] = true;
+      OwnerIDs[index] = uintVal;
+    }
+  }
+
+  PARTYPE GetValueType() const { return VT_UI4; }
+  PARSIZE GetValueSize() const { return OWNER_PARSIZE; }
+
+  void GetValue(CPropVariant &value, int index) const
+  {
+    if (index < 0 || index >= OWNER_PARSIZE)
+      throw CSystemException(E_FAIL);
+    else if (SetFileOwnership[index])
+      value = OwnerIDs[index];
+  }
+};
+
 struct CInformationData: public CHeaderData
 {
   UString InfoData;
 
-  CInformationData() { }
+  CInformationData() {}
 
   void SetStringValue(const UString strVal, int index) { InfoData = strVal; }
 
@@ -488,7 +626,7 @@ struct CExtendedData: public CHeaderData
 {
   CObjectVector<UInt32> HexDataValues;
 
-  CExtendedData() { }
+  CExtendedData() {}
 
   void SetUIntValue(UInt32 uintVal, int index) { HexDataValues.Add(uintVal); }
 
@@ -530,13 +668,14 @@ CHeaderProperty::CHeaderProperty(UString name, CHeaderData *data)
   Data = data;
 }
 
-CHeaderPropertyParser::CHeaderPropertyParser(const CHeaderPropertyForm *forms, UInt32 size, CObjectVector<CHeaderProperty> *props)
+CHeaderPropertyParser::CHeaderPropertyParser(const CHeaderPropertyForm *forms, UInt32 size,
+    CObjectVector<CHeaderProperty> *headerProps)
 {
-  if (forms == NULL || props == NULL)
+  if (forms == NULL || headerProps == NULL)
     throw CSystemException(E_POINTER);
   PropForms = forms;
   PropSize = size;
-  Props = props;
+  HeaderProps = headerProps;
 }
 
 bool CHeaderPropertyParser::ParseHeaderParameter(const CProperty &param)
@@ -558,36 +697,36 @@ bool CHeaderPropertyParser::ParseHeaderParameter(const CProperty &param)
   const CHeaderPropertyForm *propForm = PropForms;
   for (unsigned i = 0; i < PropSize; i++)
   {
-    unsigned paramIndex = -1;
-    bool propFound = false;
+    HEADERTYPE propType = HT_NOTHING;
+    int paramIndex = -1;
     if (name == propForm->Name)
-      propFound = true;
-    else
+      propType = propForm->TypeForName;
+    if (propType == HT_NOTHING)
     {
       while (++paramIndex < propForm->ParamSize)
       {
         if (name == propForm->ParamNames[paramIndex])
         {
-          propFound = true;
+          propType = propForm->ParamType;
           break;
         }
       }
     }
-    if (propFound)
+    if (propType != HT_NOTHING)
     {
-      CHeaderData *data;
       bool dataFound = false;
-      FOR_VECTOR (j, *Props)
+      CHeaderData *data;
+      FOR_VECTOR (j, *HeaderProps)
       {
-        CHeaderProperty &prop = (*Props)[j];
-        if (prop.Name == propForm->Name)
+        CHeaderProperty &headerProp = (*HeaderProps)[j];
+        if (headerProp.Name == propForm->Name)
         {
-          data = prop.Data;
           dataFound = true;
+          data = headerProp.Data;
           break;
         }
       }
-      switch (propForm->Type)
+      switch (propType)
       {
         case HT_LOCALE:
         {
@@ -619,15 +758,52 @@ bool CHeaderPropertyParser::ParseHeaderParameter(const CProperty &param)
           data->SetIntValue(offset, paramIndex);
           break;
         }
-        case HT_EXTENDED_DATA:
+        case HT_FILE_ATTRIBUTE:
         {
           if (!dataFound)
-            data = new CExtendedData();
-          UInt64 hexData = 0;
+            data = new CFileAttributeData();
           UString value = param.Value;
           unsigned len;
           while (!value.IsEmpty())
           {
+            wchar_t c = 0;
+            if (!ParseFromFileAttribute(value, paramIndex, c, len))
+              return false;
+            value.DeleteFrontal(len);
+            data->SetCharValue(c, paramIndex);
+          }
+          break;
+        }
+        case HT_FILE_PERMISSIONS:
+        {
+          if (!dataFound)
+            data = new CFilePermissionsData();
+          UInt32 mode = 0;
+          if (!ParseFromFilePermissions(param.Value, mode))
+            return false;
+          data->SetUIntValue(mode, 0);
+          break;
+        }
+        case HT_FILE_OWNERSHIP:
+        {
+          if (!dataFound)
+            data = new CFileOwnershipData();
+          unsigned len;
+          UInt32 id = 0;
+          if (!ParseFromNumberFormat(param.Value, id, len) || param.Value.Len() > len)
+            return false;
+          data->SetUIntValue(id, paramIndex);
+          break;
+        }
+        case HT_EXTENDED_DATA:
+        {
+          if (!dataFound)
+            data = new CExtendedData();
+          UString value = param.Value;
+          unsigned len;
+          while (!value.IsEmpty())
+          {
+            UInt32 hexData = 0;
             if (!ParseFromDataFormat(value, hexData, len))
               return false;
             else if (value[len] == L',')
@@ -643,10 +819,11 @@ bool CHeaderPropertyParser::ParseHeaderParameter(const CProperty &param)
             data = new CExtendedDataSwitch();
           if (!ParseFromSwitchFormat(param.Value, paramSwitch))
             return false;
-          data->SetBoolValue(paramSwitch.Val, paramIndex);
+          data->SetBoolValue(paramSwitch.Val, 0);
           break;
         }
         case HT_TIME_INFORMATION:
+        case HT_FILE_INFORMATION:
         case HT_EXTENDED_INFORMATION:
         {
           if (!dataFound)
@@ -657,8 +834,8 @@ bool CHeaderPropertyParser::ParseHeaderParameter(const CProperty &param)
       }
       if (!dataFound)
       {
-        CHeaderProperty *prop = new CHeaderProperty(propForm->Name, data);
-        Props->Add(*prop);
+        CHeaderProperty *headerProp = new CHeaderProperty(propForm->Name, data);
+        HeaderProps->Add(*headerProp);
       }
       return true;
     }

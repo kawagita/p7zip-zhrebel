@@ -112,7 +112,7 @@ void CHeaderLocale::ResetLocale()
   }
 }
 
-void CHeaderLocale::UpdateTimestamp(CItemOut &item) const
+void CHeaderLocale::AdjustTimestamp(CItemOut &item) const
 {
   FILETIME *fileTimes[] = { &item.Ntfs_MTime, &item.Ntfs_ATime, &item.Ntfs_CTime };
   for (unsigned i = 0; i < TS_PARSIZE; i++)

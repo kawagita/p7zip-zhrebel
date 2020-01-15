@@ -3,10 +3,23 @@
 #ifndef __MYWINDOWS_H
 #define __MYWINDOWS_H
 
+#include <time.h>
+
+#ifdef USE_NANO_SECONDS
+#define TIMESPEC struct timespec
+#define TIMESPEC_SECONDS(ts)      (ts).tv_sec
+#define TIMESPEC_NANO_SECONDS(ts) (ts).tv_nsec
+#define SET_TIMESPEC(ts,sec,nsec) (ts).tv_sec=(sec);(ts).tv_nsec=(nsec)
+#else
+#define TIMESPEC time_t
+#define TIMESPEC_SECONDS(ts)      (ts)
+#define TIMESPEC_NANO_SECONDS(ts) 0
+#define SET_TIMESPEC(ts,sec,nsec) (ts)=(sec)
+#endif
+
 #ifdef _WIN32
 
 #include <windows.h>
-
 #else
 
 #include <stddef.h> // for wchar_t
@@ -123,6 +136,21 @@ typedef IUnknown *LPUNKNOWN;
 
 #endif
 
+#ifdef USE_NANO_SECONDS
+typedef struct _SYSTEMTIME2
+{
+  WORD wYear;
+  WORD wMonth;
+  WORD wDay;
+  WORD wHour;
+  WORD wMinute;
+  WORD wSecond;
+  DWORD dwNanoSeconds;
+} SYSTEMTIME2;
+#else
+typedef struct _SYSTEMTIME SYSTEMTIME2;
+#endif
+
 #define VARIANT_TRUE ((VARIANT_BOOL)-1)
 #define VARIANT_FALSE ((VARIANT_BOOL)0)
 
@@ -178,13 +206,21 @@ enum TSENUM
 
 #define TS_PARSIZE 3
 
-enum OAENUM
+enum OWNERENUM
 {
-  OA_USERID = 0,
-  OA_GROUPID = 1
+  OWNER_UID = 0,
+  OWNER_GID = 1
 };
 
-#define OA_PARSIZE 2
+#define OWNER_PARSIZE 2
+
+enum ATTRENUM
+{
+  ATTR_SETTING = 0,
+  ATTR_UNSETTING = 1
+};
+
+#define ATTR_PARSIZE 2
 
 typedef VARTYPE PARTYPE;
 typedef unsigned short PARSIZE;

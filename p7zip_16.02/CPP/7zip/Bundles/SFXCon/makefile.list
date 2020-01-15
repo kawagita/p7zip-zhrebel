@@ -96,6 +96,7 @@ SRCS=\
   ../../../../CPP/Windows/PropVariantConv.cpp \
   ../../../../CPP/Windows/Synchronization.cpp \
   ../../../../CPP/Windows/System.cpp \
+  ../../../../CPP/Windows/TimeUtils.cpp \
   ../../../../CPP/myWindows/mySplitCommandLine.cpp \
   ../../../../CPP/myWindows/wine_date_and_time.cpp \
 
@@ -304,6 +305,8 @@ Synchronization.o : ../../../../CPP/Windows/Synchronization.cpp
 	$(CXX) $(CXXFLAGS) ../../../../CPP/Windows/Synchronization.cpp
 System.o : ../../../../CPP/Windows/System.cpp
 	$(CXX) $(CXXFLAGS) ../../../../CPP/Windows/System.cpp
+TimeUtils.o : ../../../../CPP/Windows/TimeUtils.cpp
+	$(CXX) $(CXXFLAGS) ../../../../CPP/Windows/TimeUtils.cpp
 mySplitCommandLine.o : ../../../../CPP/myWindows/mySplitCommandLine.cpp
 	$(CXX) $(CXXFLAGS) ../../../../CPP/myWindows/mySplitCommandLine.cpp
 wine_date_and_time.o : ../../../../CPP/myWindows/wine_date_and_time.cpp
@@ -402,6 +405,7 @@ OBJS=\
  PropVariantConv.o \
  Synchronization.o \
  System.o \
+ TimeUtils.o \
  mySplitCommandLine.o \
  wine_date_and_time.o \
  $(OBJ_AES) \

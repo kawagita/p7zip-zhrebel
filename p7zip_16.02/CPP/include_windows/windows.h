@@ -111,20 +111,25 @@ typedef unsigned __int64 UINT64;
 typedef __int64 INT64;
 /* END #include <basetsd.h> */
 
-#define FILE_ATTRIBUTE_READONLY             1
-#define FILE_ATTRIBUTE_HIDDEN               2
-#define FILE_ATTRIBUTE_SYSTEM               4
-#define FILE_ATTRIBUTE_DIRECTORY           16
-#define FILE_ATTRIBUTE_ARCHIVE             32
-#define FILE_ATTRIBUTE_DEVICE              64
-#define FILE_ATTRIBUTE_NORMAL             128
-#define FILE_ATTRIBUTE_TEMPORARY          256
-#define FILE_ATTRIBUTE_SPARSE_FILE        512
-#define FILE_ATTRIBUTE_REPARSE_POINT     1024
-#define FILE_ATTRIBUTE_COMPRESSED        2048
-#define FILE_ATTRIBUTE_OFFLINE          0x1000
-#define FILE_ATTRIBUTE_ENCRYPTED        0x4000
-#define FILE_ATTRIBUTE_UNIX_EXTENSION   0x8000   /* trick for Unix */
+#define FILE_ATTRIBUTE_READONLY                  1
+#define FILE_ATTRIBUTE_HIDDEN                    2
+#define FILE_ATTRIBUTE_SYSTEM                    4
+#define FILE_ATTRIBUTE_DIRECTORY                16
+#define FILE_ATTRIBUTE_ARCHIVE                  32
+#define FILE_ATTRIBUTE_DEVICE                   64
+#define FILE_ATTRIBUTE_NORMAL                  128
+#define FILE_ATTRIBUTE_TEMPORARY               256
+#define FILE_ATTRIBUTE_SPARSE_FILE             512
+#define FILE_ATTRIBUTE_REPARSE_POINT          1024
+#define FILE_ATTRIBUTE_COMPRESSED             2048
+#define FILE_ATTRIBUTE_OFFLINE              0x1000
+#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x2000
+#define FILE_ATTRIBUTE_ENCRYPTED            0x4000
+#define FILE_ATTRIBUTE_UNIX_EXTENSION       0x8000   /* trick for Unix */
+
+#define FILE_ATTRIBUTE_UNIX_MASK        0xFFFF0000
+#define FILE_ATTRIBUTE_WIN_MASK         (~(FILE_ATTRIBUTE_UNIX_MASK | \
+                                           FILE_ATTRIBUTE_UNIX_EXTENSION))
 
 /* END   <winerror.h> */
 

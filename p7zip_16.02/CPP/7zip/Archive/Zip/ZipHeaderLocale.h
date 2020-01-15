@@ -76,7 +76,7 @@ public:
   bool SwitchEncodingLocale();
   void ResetLocale();
 
-  void UpdateTimestamp(CItemOut &item) const;
+  void AdjustTimestamp(CItemOut &item) const;
 };
 
 }}

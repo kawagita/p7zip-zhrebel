@@ -31,6 +31,8 @@ void CDirItems::AddDirFileInfo(int phyParent, int logParent, int secureIndex,
   di.CTime = fi.CTime;
   di.ATime = fi.ATime;
   di.MTime = fi.MTime;
+  di.UID = fi.UID;
+  di.GID = fi.GID;
   di.Attrib = fi.Attrib;
   di.IsAltStream = fi.IsAltStream;
   di.PhyParent = phyParent;
@@ -112,6 +114,22 @@ UString CDirItems::GetLogPath(unsigned index) const
 {
   const CDirItem &di = Items[index];
   return GetPrefixesPath(LogParents, di.LogParent, di.Name);
+}
+
+UString CDirItems::GetSymLink(unsigned index) const
+{
+  UString linkName;
+  const CDirItem &di = Items[index];
+  if (di.IsSymLink())
+  {
+    NFile::NIO::CInFile file;
+    if (file.Open(GetPrefixesPath(LogParents, di.LogParent, di.Name)))
+    {
+      file.ReadSymLink(linkName);
+      file.Close();
+    }
+  }
+  return linkName;
 }
 
 void CDirItems::ReserveDown()
@@ -527,6 +545,11 @@ static HRESULT EnumerateDirItems(
   
   RINOK(dirItems.ScanProgress(phyPrefix));
 
+  bool symlinksFollowed = true;
+  #ifdef USE_NOT_FOLLOWING_SYMLINKS
+  symlinksFollowed = !dirItems.SymLinks;
+  #endif
+
   // try direct_names case at first
   if (addArchivePrefix.IsEmpty() && !enterToSubFolders)
   {
@@ -593,7 +616,7 @@ static HRESULT EnumerateDirItems(
         }
         else
         #endif
-        if (!fi.Find(fullPath,true))
+        if (!fi.Find(fullPath, symlinksFollowed))
         {
           RINOK(dirItems.AddError(fullPath));
           continue;
@@ -704,7 +727,7 @@ static HRESULT EnumerateDirItems(
         }
         else
         {
-          if (!fi.Find(fullPath,true))
+          if (!fi.Find(fullPath, symlinksFollowed))
           {
             if (!nextNode.AreThereIncludeItems())
               continue;

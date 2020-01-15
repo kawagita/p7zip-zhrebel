@@ -19,6 +19,9 @@ REGISTER_ARC_IO(
   "zip", "zip z01 zipx jar xpi odt ods docx xlsx epub", 0, 1,
   k_Signature,
   0,
+  #ifdef USE_NOT_FOLLOWING_SYMLINKS
+  NArcInfoFlags::kSymLinks |
+  #endif
   NArcInfoFlags::kFindSignature |
   NArcInfoFlags::kMultiSignature |
   NArcInfoFlags::kUseGlobalOffset,

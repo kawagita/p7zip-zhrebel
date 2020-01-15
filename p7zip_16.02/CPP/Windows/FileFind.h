@@ -33,6 +33,8 @@ public:
   FILETIME CTime;
   FILETIME ATime;
   FILETIME MTime;
+  UInt32 UID;
+  UInt32 GID;
   DWORD Attrib;
   bool IsAltStream;
   bool IsDevice;

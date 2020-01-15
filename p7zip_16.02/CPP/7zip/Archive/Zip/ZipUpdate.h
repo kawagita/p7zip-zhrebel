@@ -40,6 +40,8 @@ struct CUpdateItem
   bool IsUtf8;
   int IndexInArc;
   int IndexInClient;
+  UInt32 UID;
+  UInt32 GID;
   UInt32 Attrib;
   UInt32 Time;
   UInt64 Size;

@@ -140,6 +140,8 @@ static const Byte kProps[] =
   kpidAttrib,
   // kpidPosixAttrib,
   #ifdef ZIP_HEADER_REBEL
+  kpidUID,
+  kpidGID,
   kpidExtra,
   #endif
   kpidEncrypted,
@@ -271,10 +273,7 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
   NWindows::NCOM::CPropVariant prop;
   const CItemEx &item = m_Items[index];
   const CExtraBlock &extra = item.GetMainExtra();
-  unsigned ntfsExtraIndex = NFileHeader::NNtfsExtra::kATime;
-  #ifdef ZIP_HEADER_REBEL
-  unsigned unixTimeIndex = NFileHeader::NUnixTime::kATime;
-  #endif
+  unsigned extraTimeIndex = TS_ACTIME;
   
   switch (propID)
   {
@@ -307,11 +306,11 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
       CUnixTimeExtra e;
       #endif
       UInt32 type;
-      if (extra.GetNtfsTime(NFileHeader::NNtfsExtra::kMTime, ft))
+      if (extra.GetNtfsTime(TS_MODTIME, ft))
         type = NFileTimeType::kWindows;
       else if (extra.GetUnixTime(
                    #ifndef ZIP_HEADER_REBEL
-                   true, NFileHeader::NUnixTime::kMTime, unixTime
+                   true, TS_MODTIME, unixTime
                    #else
                    e
                    #endif
@@ -324,28 +323,25 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
     }
     
     case kpidCTime:
-      ntfsExtraIndex = NFileHeader::NNtfsExtra::kCTime;
-      #ifdef ZIP_HEADER_REBEL
-      unixTimeIndex = NFileHeader::NUnixTime::kCTime;
-      #endif
+      extraTimeIndex = TS_CRTIME;
     
     case kpidATime:
     {
       FILETIME ft;
       bool defined = true;
-      if (!extra.GetNtfsTime(ntfsExtraIndex, ft))
+      if (!extra.GetNtfsTime(extraTimeIndex, ft))
       {
         #ifdef ZIP_HEADER_REBEL
         CUnixTimeExtra e;
-        if (extra.GetUnixTime(e) && e.IsTimePresent[unixTimeIndex])
+        if (extra.GetUnixTime(e) && e.IsTimePresent[extraTimeIndex])
         {
-          if (e.EpochTimes[unixTimeIndex] < 0 && !item.LocalExtra.GetUnixTime(e))
+          if (e.EpochTimes[extraTimeIndex] < 0 && !item.LocalExtra.GetUnixTime(e))
           {
             CItemEx itemEx = item;
             if (m_Archive.ReadLocalItemAfterCdItemFull(itemEx) == S_OK)
               itemEx.LocalExtra.GetUnixTime(e);
           }
-          Int64 epochTime = e.EpochTimes[unixTimeIndex];
+          Int64 epochTime = e.EpochTimes[extraTimeIndex];
           if (epochTime >= 0)
             NTime::UnixTimeToFileTime(epochTime, ft);
           else
@@ -364,16 +360,16 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
     {
       FILETIME utc;
       bool defined = true;
-      if (!extra.GetNtfsTime(NFileHeader::NNtfsExtra::kMTime, utc))
+      if (!extra.GetNtfsTime(TS_MODTIME, utc))
       {
         #ifndef ZIP_HEADER_REBEL
         UInt32 unixTime = 0;
-        if (extra.GetUnixTime(true, NFileHeader::NUnixTime::kMTime, unixTime))
+        if (extra.GetUnixTime(true, TS_MODTIME, unixTime))
           NTime::UnixTimeToFileTime(unixTime, utc);
         #else
         CUnixTimeExtra e;
         if (extra.GetUnixTime(e))
-          NTime::UnixTimeToFileTime(e.EpochTimes[NFileHeader::NUnixTime::kMTime], utc);
+          NTime::UnixTimeToFileTime(e.EpochTimes[TS_MODTIME], utc);
         #endif
         else
         {
@@ -390,7 +386,13 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
       break;
     }
     
-    case kpidAttrib:  prop = item.GetWinAttrib(); break;
+    case kpidAttrib:
+      prop = item.GetWinAttrib(
+                 #ifdef ZIP_HEADER_REBEL
+                 m_HeaderFileInfoType
+                 #endif
+                 );
+      break;
     
     case kpidPosixAttrib:
     {
@@ -399,7 +401,26 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
         prop = attrib;
       break;
     }
-
+    
+    case kpidUID:
+    {
+      #ifdef ZIP_HEADER_REBEL
+      CUnixFileOwnershipExtra e;
+      if (extra.GetUnixFileOwnership(e))
+        prop = e.OwnerIDs[OWNER_UID];
+      #endif
+      break;
+    }
+    
+    case kpidGID:
+    {
+      #ifdef ZIP_HEADER_REBEL
+      CUnixFileOwnershipExtra e;
+      if (extra.GetUnixFileOwnership(e))
+        prop = e.OwnerIDs[OWNER_GID];
+      #endif
+      break;
+    }
     
     #ifdef ZIP_HEADER_REBEL
     case kpidExtra:

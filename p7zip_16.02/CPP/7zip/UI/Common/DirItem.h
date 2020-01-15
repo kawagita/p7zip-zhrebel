@@ -3,6 +3,7 @@
 #ifndef __DIR_ITEM_H
 #define __DIR_ITEM_H
 
+#include "../../../Common/MyLinux.h"
 #include "../../../Common/MyString.h"
 
 #include "../../../Windows/FileFind.h"
@@ -59,6 +60,8 @@ struct CDirItem
   bool AreReparseData() const { return ReparseData.Size() != 0 || ReparseData2.Size() != 0; }
   #endif
   
+  UInt32 UID;
+  UInt32 GID;
   UInt32 Attrib;
   int PhyParent;
   int LogParent;
@@ -68,6 +71,7 @@ struct CDirItem
   
   CDirItem(): PhyParent(-1), LogParent(-1), SecureIndex(-1), IsAltStream(false) {}
   bool IsDir() const { return (Attrib & FILE_ATTRIBUTE_DIRECTORY) != 0 ; }
+  bool IsSymLink() const { return ((Attrib >> 16) & MY_LIN_S_IFMT) == MY_LIN_S_IFLNK ; }
 };
 
 class CDirItems
@@ -121,6 +125,7 @@ public:
   // unsigned GetNumFolders() const { return Prefixes.Size(); }
   FString GetPhyPath(unsigned index) const;
   UString GetLogPath(unsigned index) const;
+  UString GetSymLink(unsigned index) const;
 
   unsigned AddPrefix(int phyParent, int logParent, const UString &prefix);
   void DeleteLastPrefix();

@@ -51,9 +51,6 @@ private:
   int m_MainMethod;
   bool m_ForceAesMode;
   bool m_WriteNtfsTimeExtra;
-  #ifdef ZIP_HEADER_REBEL
-  bool m_WriteHeaderExtraAll;
-  #endif
   bool _removeSfxBlock;
   bool m_ForceLocal;
   bool m_ForceUtf8;
@@ -61,10 +58,10 @@ private:
   UInt32 _specifiedCodePage;
 
   #ifdef ZIP_HEADER_REBEL
-  UInt32 m_HeaderTimeType;
+  UInt16 m_HeaderFileInfoType;
+  UInt16 m_HeaderTimeType;
+  CFileHeaderInfo m_HeaderInfo;
   CHeaderLocale m_HeaderLocale;
-  CObjectVector<UInt16> m_HeaderExtraAddedIDs;
-  CObjectVector<UInt16> m_HeaderExtraDeletedIDs;
   #endif
 
   DECL_EXTERNAL_CODECS_VARS
@@ -85,11 +82,10 @@ private:
   void InitHeaderProps()
   {
     #ifdef ZIP_HEADER_REBEL
-    m_WriteHeaderExtraAll = false;
+    m_HeaderFileInfoType = NFileHeader::NFileInfoType::kDefault;
     m_HeaderTimeType = NFileHeader::NTimeType::kDefault;
+    m_HeaderInfo.InitHeaderInfo();
     m_HeaderLocale.InitLocaleSetting();
-    m_HeaderExtraAddedIDs.Clear();
-    m_HeaderExtraDeletedIDs.Clear();
     #endif
   }
 };

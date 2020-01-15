@@ -62,9 +62,7 @@ bool CExtraSubBlock::ExtractUnixTime(bool isCentral, unsigned index, UInt32 &res
   size--;
   if (isCentral)
   {
-    if (index != NUnixTime::kMTime ||
-        (flags & (1 << NUnixTime::kMTime)) == 0 ||
-        size < 4)
+    if (index != TS_MODTIME || (flags & (1 << TS_MODTIME)) == 0 || size < 4)
       return false;
     res = GetUi32(p);
     return true;
@@ -87,12 +85,12 @@ bool CExtraSubBlock::ExtractUnixTime(bool isCentral, unsigned index, UInt32 &res
 #else
 bool CUnixTimeExtra::ParseFromSubBlock(const CExtraSubBlock &sb)
 {
-  if (sb.ID == NExtraID::kUnixTime && sb.Data.Size() > 1)
+  if (sb.ID == NExtraID::kUnixTime && sb.Data.Size() >= 1)
   {
     unsigned needSize = k_UnixTimeExtra_OnlyModTimeLength;
     const Byte *p = (const Byte *)sb.Data;
     Byte flags = *p++;
-    for (unsigned i = 0; i < NUnixTime::kNumFields; i++)
+    for (unsigned i = 0; i < TS_PARSIZE; i++)
     {
       bool isTimePresent = (flags & (1 << i)) != 0;
       if (isTimePresent && sb.Data.Size() >= needSize)
@@ -108,19 +106,19 @@ bool CUnixTimeExtra::ParseFromSubBlock(const CExtraSubBlock &sb)
   }
   else
     InitTimeFields();
-  return IsTimePresent[NUnixTime::kMTime] && EpochTimes[NUnixTime::kMTime] >= 0;
+  return IsTimePresent[TS_MODTIME] && EpochTimes[TS_MODTIME] >= 0;
 }
 
 void CUnixTimeExtra::SetSubBlock(CExtraSubBlock &sb, bool toLocal) const
 {
   unsigned len = 1;
   Byte flags = 0;
-  for (unsigned i = 0; i < NUnixTime::kNumFields; i++)
+  for (unsigned i = 0; i < TS_PARSIZE; i++)
   {
     if (IsTimePresent[i])
     {
       flags |= (Byte)(1 << i);
-      if (toLocal || i == NUnixTime::kMTime)
+      if (toLocal || i == TS_MODTIME)
         len += k_UnixTimeExtra_EpochTimeLength;
     }
   }
@@ -128,13 +126,52 @@ void CUnixTimeExtra::SetSubBlock(CExtraSubBlock &sb, bool toLocal) const
   sb.Data.Alloc(len);
   Byte *p = (Byte *)sb.Data;
   *p++ = flags;
-  for (unsigned i = 0; i < NUnixTime::kNumFields; i++)
+  for (unsigned i = 0; i < TS_PARSIZE; i++)
   {
-    p[0] = (Byte)EpochTimes[i];
-    p[1] = (Byte)(EpochTimes[i] >> 8);
-    p[2] = (Byte)(EpochTimes[i] >> 16);
-    p[3] = (Byte)(EpochTimes[i] >> 24);
+    for (unsigned j = 0; j < k_UnixTimeExtra_EpochTimeLength; j++)
+      p[j] = (Byte)(EpochTimes[i] >> (8 * j));
     p += k_UnixTimeExtra_EpochTimeLength;
+  }
+}
+
+bool CUnixFileOwnershipExtra::ParseFromSubBlock(const CExtraSubBlock &sb)
+{
+  if (sb.ID != NExtraID::kUnixFileOwnership || sb.Data.Size() < 2)
+    return false;
+  unsigned needSize = 2;
+  const Byte *p = (const Byte *)sb.Data;
+  *p++;  // Version
+  for (unsigned i = 0; i < OWNER_PARSIZE; i++)
+  {
+    unsigned len = *p++;
+    needSize += len;
+    if (sb.Data.Size() < needSize || len > k_UnixFileOwnershipExtra_OwnerIDLength)
+    {
+      InitIDFields();
+      return false;
+    }
+    UInt32 id = 0;
+    for (int j = len - 1; j >= 0; j--)
+      id = (id << 8) + p[j];
+    OwnerIDs[i] = id;
+    p += len;
+    needSize++;
+  }
+  return true;
+}
+
+void CUnixFileOwnershipExtra::SetSubBlock(CExtraSubBlock &sb) const
+{
+  sb.ID = NExtraID::kUnixFileOwnership;
+  sb.Data.Alloc(k_UnixFileOwnershipExtra_DataBlockLength);
+  Byte *p = (Byte *)sb.Data;
+  *p++ = 1;  // Version
+  for (unsigned i = 0; i < OWNER_PARSIZE; i++)
+  {
+    *p++ = k_UnixFileOwnershipExtra_OwnerIDLength;
+    for (unsigned j = 0; j < k_UnixFileOwnershipExtra_OwnerIDLength; j++)
+      p[j] = (Byte)(OwnerIDs[i] >> (8 * j));
+    p += k_UnixFileOwnershipExtra_OwnerIDLength;
   }
 }
 #endif
@@ -225,8 +262,20 @@ bool CItem::IsDir() const
   }
 }
 
-UInt32 CItem::GetWinAttrib() const
+UInt32 CItem::GetWinAttrib(
+    #ifdef ZIP_HEADER_REBEL
+    UInt16 fileInfoType
+    #endif
+    ) const
 {
+  #ifdef ZIP_HEADER_REBEL
+  if (fileInfoType == NFileInfoType::kWindows)
+    return ExternalAttrib & FILE_ATTRIBUTE_WIN_MASK;
+  else if (fileInfoType == NFileInfoType::kUnix)
+    return ExternalAttrib & FILE_ATTRIBUTE_UNIX_MASK;
+  else if (fileInfoType == NFileInfoType::kUnixWithAttrib)
+    return ExternalAttrib;
+  #endif
   UInt32 winAttrib = 0;
   switch (GetHostOS())
   {

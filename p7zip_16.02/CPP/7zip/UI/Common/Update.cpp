@@ -627,15 +627,15 @@ static HRESULT Compress(
       up2.SetAs_NoChangeArcItem(ai.IndexInServer);
       switch (options.HeaderChangedMode)
       {
-        case NHeaderChangedMode::EEnum::kSetCensorPathHeader:
+        case NHeaderChangedMode::kSetCensorPathHeader:
           if (ai.Censored)
             up2.NewProps = true;
           break;
-        case NHeaderChangedMode::EEnum::kSetDirectoryHeaderOnly:
+        case NHeaderChangedMode::kSetDirectoryHeaderOnly:
           if (ai.IsDir)
             up2.NewProps = true;
           break;
-        case NHeaderChangedMode::EEnum::kSetFileHeaderOnly:
+        case NHeaderChangedMode::kSetFileHeaderOnly:
           if (!ai.IsDir)
             up2.NewProps = true;
           break;
@@ -687,8 +687,6 @@ static HRESULT Compress(
 
   updateCallbackSpec->StoreNtSecurity = options.NtSecurity.Val;
   updateCallbackSpec->StoreHardLinks = options.HardLinks.Val;
-  updateCallbackSpec->StoreSymLinks = options.SymLinks.Val;
-
   updateCallbackSpec->StoreSymLinks = options.SymLinks.Val;
 
   updateCallbackSpec->Arc = arc;
@@ -1225,6 +1223,8 @@ HRESULT UpdateArchive(
     di.Attrib = 0;
     NTime::GetCurUtcFileTime(di.MTime);
     di.CTime = di.ATime = di.MTime;
+    di.UID = getuid();
+    di.GID = getgid();
     dirItems.Items.Add(di);
   }
   else
@@ -1281,6 +1281,8 @@ HRESULT UpdateArchive(
             parentDirItem.CTime = fi.CTime;
             parentDirItem.ATime = fi.ATime;
             parentDirItem.MTime = fi.MTime;
+            parentDirItem.UID = fi.UID;
+            parentDirItem.GID = fi.GID;
             parentDirItem.Attrib = fi.Attrib;
             parentDirItem_Ptr = &parentDirItem;
 

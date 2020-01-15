@@ -16,6 +16,8 @@ enum
   kpidIsDir,
   kpidSize,
   kpidPackSize,
+  kpidUID,
+  kpidGID,
   kpidAttrib,
   kpidCTime,
   kpidATime,

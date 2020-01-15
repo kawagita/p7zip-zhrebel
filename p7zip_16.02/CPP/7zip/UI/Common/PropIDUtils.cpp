@@ -19,7 +19,7 @@
 
 using namespace NWindows;
 
-static const char g_WinAttribChars[16 + 1] = "RHS8DAdNTsLCOnE_";
+static const char g_WinAttribChars[16 + 1] = "RHS8DAdNTsLCOIE_";
 /*
 0 READONLY
 1 HIDDEN

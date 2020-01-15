@@ -4,9 +4,10 @@
 
 #include "FileIO.h"
 #include "Defs.h"
+#include "TimeUtils.h"
 #include "../Common/StringConvert.h"
 
-#include <time.h>
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -31,8 +32,6 @@ extern "C"
 int global_use_lstat=1; // default behaviour : p7zip stores symlinks instead of dumping the files they point to
 }
 #endif
-
-extern BOOLEAN WINAPI RtlTimeToSecondsSince1970( const LARGE_INTEGER *Time, DWORD *Seconds );
 
 namespace NWindows {
 namespace NFile {
@@ -144,14 +143,37 @@ bool CFileBase::Create(LPCWSTR fileName, DWORD desiredAccess,
 }
 */
 
+#ifdef USE_NANO_SECONDS
+#define UTIME(n,t) utimes((n),(t))
+#define UTIMBUF_ACTIME(buf)  (buf)[0]
+#define UTIMBUF_MODTIME(buf) (buf)[1]
+#define SET_UTIMBUF_ACTIME(buf,sec,ns)  UTIMBUF_ACTIME(buf).tv_sec=sec;  UTIMBUF_ACTIME(buf).tv_usec=ns/1000
+#define SET_UTIMBUF_MODTIME(buf,sec,ns) UTIMBUF_MODTIME(buf).tv_sec=sec; UTIMBUF_MODTIME(buf).tv_usec=ns/1000
+#else
+#define UTIME(n,t) utime((n),&(t))
+#define UTIMBUF_ACTIME(buf)  (buf).actime
+#define UTIMBUF_MODTIME(buf) (buf).modtime
+#define SET_UTIMBUF_ACTIME(buf,sec,ns)  (UTIMBUF_ACTIME(buf)=sec)
+#define SET_UTIMBUF_MODTIME(buf,sec,ns) (UTIMBUF_MODTIME(buf)=sec)
+#endif
+#define COPY_UTIMBUF_ACTIME(buf,st) \
+        SET_UTIMBUF_ACTIME(buf,TIMESPEC_SECONDS(STAT_ATIME(st)), TIMESPEC_NANO_SECONDS(STAT_ATIME(st)))
+#define COPY_UTIMBUF_MODTIME(buf,st) \
+        SET_UTIMBUF_ACTIME(buf,TIMESPEC_SECONDS(STAT_MTIME(st)), TIMESPEC_NANO_SECONDS(STAT_MTIME(st)))
+
 bool CFileBase::Close()
 {
+  #ifdef USE_NANO_SECONDS
+  struct timeval buf[2];
+  #else
   struct utimbuf buf;
+  #endif
 
-  buf.actime  = _lastAccessTime;
-  buf.modtime = _lastWriteTime;
+  SET_UTIMBUF_ACTIME(buf, TIMESPEC_SECONDS(_lastAccessTime), TIMESPEC_NANO_SECONDS(_lastAccessTime));
+  SET_UTIMBUF_MODTIME(buf, TIMESPEC_SECONDS(_lastWriteTime), TIMESPEC_NANO_SECONDS(_lastWriteTime));
 
-  _lastAccessTime = _lastWriteTime = (time_t)-1;
+  SET_TIMESPEC(_lastAccessTime, (time_t)-1, 0);
+  SET_TIMESPEC(_lastWriteTime, (time_t)-1, 0);
 
   if(_fd == -1)
     return true;
@@ -168,18 +190,19 @@ bool CFileBase::Close()
     _fd = -1;
 
     /* On some OS (mingwin, MacOSX ...), you must close the file before updating times */
-    if ((buf.actime != (time_t)-1) || (buf.modtime != (time_t)-1)) {
+    if ((TIMESPEC_SECONDS(UTIMBUF_ACTIME(buf))  != (time_t)-1) ||
+        (TIMESPEC_SECONDS(UTIMBUF_MODTIME(buf)) != (time_t)-1)) {
       struct stat    oldbuf;
       int ret = stat((const char*)(_unix_filename),&oldbuf);
       if (ret == 0) {
-        if (buf.actime  == (time_t)-1) buf.actime  = oldbuf.st_atime;
-        if (buf.modtime == (time_t)-1) buf.modtime = oldbuf.st_mtime;
+        if (TIMESPEC_SECONDS(UTIMBUF_ACTIME(buf))  == (time_t)-1) COPY_UTIMBUF_ACTIME(buf, oldbuf);
+        if (TIMESPEC_SECONDS(UTIMBUF_MODTIME(buf)) == (time_t)-1) COPY_UTIMBUF_MODTIME(buf, oldbuf);
       } else {
         time_t current_time = time(0);
-        if (buf.actime  == (time_t)-1) buf.actime  = current_time;
-        if (buf.modtime == (time_t)-1) buf.modtime = current_time;
+        if (TIMESPEC_SECONDS(UTIMBUF_ACTIME(buf))  == (time_t)-1) SET_UTIMBUF_ACTIME(buf, current_time, 0);
+        if (TIMESPEC_SECONDS(UTIMBUF_MODTIME(buf)) == (time_t)-1) SET_UTIMBUF_MODTIME(buf, current_time, 0);
       }
-      /* ret = */ utime((const char *)(_unix_filename), &buf);
+      /* ret = */ UTIME((const char *)(_unix_filename), buf);
     }
     return true;
   }
@@ -336,6 +359,17 @@ bool CInFile::Read(void *buffer, UINT32 bytesToRead, UINT32 &bytesRead)
   return FALSE;
 }
 
+bool CInFile::ReadSymLink(UString &linkName)
+{
+#ifdef ENV_HAVE_LSTAT
+  if (_fd == FD_LINK) {
+    MultiByteToUnicodeString2(linkName, AString(_buffer));
+    return true;
+  }
+#endif
+  return false;
+}
+
 /////////////////////////
 // COutFile
 
@@ -367,9 +401,6 @@ bool COutFile::CreateAlways(CFSTR fileName, DWORD /* flagsAndAttributes */ )
 
 bool COutFile::SetTime(const FILETIME *cTime, const FILETIME *aTime, const FILETIME *mTime) throw()
 {
-  LARGE_INTEGER  ltime;
-  DWORD dw;
-
   if (_fd == -1) {
      SetLastError( ERROR_INVALID_HANDLE );
      return false;
@@ -377,16 +408,10 @@ bool COutFile::SetTime(const FILETIME *cTime, const FILETIME *aTime, const FILET
 
   /* On some OS (cygwin, MacOSX ...), you must close the file before updating times */
   if (aTime) {
-     ltime.QuadPart = aTime->dwHighDateTime;
-     ltime.QuadPart = (ltime.QuadPart << 32) | aTime->dwLowDateTime;
-     RtlTimeToSecondsSince1970( &ltime, &dw );
-     _lastAccessTime = dw;
+     NTime::FileTimeToTimespec(*aTime, _lastAccessTime);
   }
   if (mTime) {
-     ltime.QuadPart = mTime->dwHighDateTime;
-     ltime.QuadPart = (ltime.QuadPart << 32) | mTime->dwLowDateTime;
-     RtlTimeToSecondsSince1970( &ltime, &dw );
-     _lastWriteTime = dw;
+     NTime::FileTimeToTimespec(*mTime, _lastWriteTime);
   }
 
   return true;

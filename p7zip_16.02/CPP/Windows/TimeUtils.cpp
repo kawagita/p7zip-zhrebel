@@ -115,11 +115,16 @@ bool FileTimeToDosTime(const FILETIME &ft, UInt32 &dosTime) throw()
   return true;
 }
 
-void UnixTimeToFileTime(UInt32 unixTime, FILETIME &ft) throw()
+static void UnixSecondsToFileTime(UInt32 sec, UInt32 nsec, FILETIME &ft)
 {
-  UInt64 v = (kUnixTimeOffset + (UInt64)unixTime) * kNumTimeQuantumsInSecond;
+  UInt64 v = (kUnixTimeOffset + (UInt64)sec) * kNumTimeQuantumsInSecond + (nsec / 100);
   ft.dwLowDateTime = (DWORD)v;
   ft.dwHighDateTime = (DWORD)(v >> 32);
+}
+
+void UnixTimeToFileTime(UInt32 unixTime, FILETIME &ft) throw()
+{
+  UnixSecondsToFileTime(unixTime, 0, ft);
 }
 
 bool UnixTime64ToFileTime(Int64 unixTime, FILETIME &ft) throw()
@@ -147,23 +152,37 @@ Int64 FileTimeToUnixTime64(const FILETIME &ft) throw()
   return (Int64)(winTime / kNumTimeQuantumsInSecond) - kUnixTimeOffset;
 }
 
-bool FileTimeToUnixTime(const FILETIME &ft, UInt32 &unixTime) throw()
+static bool FileTimeToUnixSeconds(const FILETIME &ft, UInt32 *sec, UInt32 *nsec)
 {
   UInt64 winTime = (((UInt64)ft.dwHighDateTime) << 32) + ft.dwLowDateTime;
-  winTime /= kNumTimeQuantumsInSecond;
-  if (winTime < kUnixTimeOffset)
+  UInt64 seconds = winTime / kNumTimeQuantumsInSecond;
+  if (seconds < kUnixTimeOffset)
   {
-    unixTime = 0;
+    if (sec)
+      *sec = 0;
+    if (nsec)
+      *nsec = 0xFFFFFFFF;
     return false;
   }
-  winTime -= kUnixTimeOffset;
-  if (winTime > 0xFFFFFFFF)
+  seconds -= kUnixTimeOffset;
+  if (seconds > 0xFFFFFFFF)
   {
-    unixTime = 0xFFFFFFFF;
+    if (sec)
+      *sec = 0xFFFFFFFF;
+    if (nsec)
+      *nsec = 0xFFFFFFFF;
     return false;
   }
-  unixTime = (UInt32)winTime;
+  if (sec)
+    *sec = (UInt32)seconds;
+  if (nsec)
+    *nsec = (UInt32)((winTime % kNumTimeQuantumsInSecond) * 100);
   return true;
+}
+
+bool FileTimeToUnixTime(const FILETIME &ft, UInt32 &unixTime) throw()
+{
+  return FileTimeToUnixSeconds(ft, &unixTime, NULL);
 }
 
 bool GetSecondsSince1601(unsigned year, unsigned month, unsigned day,
@@ -187,17 +206,17 @@ bool GetSecondsSince1601(unsigned year, unsigned month, unsigned day,
 }
 
 bool GetFileTimeSince1601(unsigned year, unsigned month, unsigned day,
-  unsigned hour, unsigned min, unsigned sec, unsigned _100ns, FILETIME &fileTime) throw()
+  unsigned hour, unsigned min, unsigned sec, unsigned _100ns, FILETIME &ft) throw()
 {
   UInt64 res;
   if (!GetSecondsSince1601(year, month, day, hour, min, sec, res))
   {
-    fileTime.dwLowDateTime = fileTime.dwHighDateTime = 0;
+    ft.dwLowDateTime = ft.dwHighDateTime = 0;
     return false;
   }
   res = res * kNumTimeQuantumsInSecond + _100ns;
-  fileTime.dwLowDateTime = (UInt32)res;
-  fileTime.dwHighDateTime = (UInt32)(res >> 32);
+  ft.dwLowDateTime = (UInt32)res;
+  ft.dwHighDateTime = (UInt32)(res >> 32);
   return true;
 }
 
@@ -215,11 +234,11 @@ void GetCurUtcFileTime(FILETIME &ft) throw()
   #endif
 }
 
-void AddOffsetSecondsToFileTime(Int32 offset, FILETIME &fileTime) throw()
+void AddOffsetSecondsToFileTime(Int32 offset, FILETIME &ft) throw()
 {
   if (offset != 0)
   {
-    UInt64 winTime = (((UInt64)fileTime.dwHighDateTime) << 32) + fileTime.dwLowDateTime;
+    UInt64 winTime = (((UInt64)ft.dwHighDateTime) << 32) + ft.dwLowDateTime;
     Int64 offsetTime = (Int64)offset * kNumTimeQuantumsInSecond;
     if (offset < 0)
     {
@@ -233,32 +252,50 @@ void AddOffsetSecondsToFileTime(Int32 offset, FILETIME &fileTime) throw()
       winTime = 0xFFFFFFFFFFFFFFFF;
     else
       winTime += offsetTime;
-    fileTime.dwLowDateTime = (UInt32)winTime;
-    fileTime.dwHighDateTime = (UInt32)(winTime >> 32);
+    ft.dwLowDateTime = (UInt32)winTime;
+    ft.dwHighDateTime = (UInt32)(winTime >> 32);
   }
 }
 
-#ifdef UNIX_USE_WIN_TIME
-bool FileTimeToSystemTime2(const FILETIME &fileTime, SYSTEMTIME2 &systemTime) throw()
+void TimespecToFileTime(const TIMESPEC &ts, FILETIME &ft) throw()
+{
+  UnixSecondsToFileTime(TIMESPEC_SECONDS(ts), TIMESPEC_NANO_SECONDS(ts), ft);
+}
+
+bool FileTimeToTimespec(const FILETIME &ft, TIMESPEC &ts) throw()
+{
+  UInt32 sec, nsec;
+  bool ret = FileTimeToUnixSeconds(ft, &sec, &nsec);
+  SET_TIMESPEC(ts, sec, nsec);
+  return ret;
+}
+
+bool FileTimeToSystemTime2(const FILETIME &ft, SYSTEMTIME2 &systemTime) throw()
 {
   SYSTEMTIME st;
-  if (!BOOLToBool(FileTimeToSystemTime(&fileTime, &st)))
+  if (!BOOLToBool(FileTimeToSystemTime(&ft, &st)))
   {
     systemTime.wYear = systemTime.wMonth = systemTime.wDay = 0;
     systemTime.wHour = systemTime.wMinute = systemTime.wSecond = 0;
+    #ifdef USE_NANO_SECONDS
     systemTime.dwNanoSeconds = 0;
+    #else
+    systemTime.wMilliseconds = 0;
+    #endif
     return false;
   }
-  UInt64 winTime = (((UInt64)fileTime.dwHighDateTime) << 32) + fileTime.dwLowDateTime;
   systemTime.wYear = st.wYear;
   systemTime.wMonth = st.wMonth;
   systemTime.wDay = st.wDay;
   systemTime.wHour = st.wHour;
   systemTime.wMinute = st.wMinute;
   systemTime.wSecond = st.wSecond;
-  systemTime.dwNanoSeconds = (UInt32)(winTime % kNumTimeQuantumsInSecond * 100);
+  #ifdef USE_NANO_SECONDS
+  FileTimeToUnixSeconds(ft, NULL, &systemTime.dwNanoSeconds);
+  #else
+  systemTime.wMilliseconds = st.wMilliseconds;
+  #endif
   return true;
 }
-#endif
 
 }}

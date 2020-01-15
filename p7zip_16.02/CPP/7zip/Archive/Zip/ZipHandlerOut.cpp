@@ -28,6 +28,24 @@ using namespace NWindows;
 using namespace NCOM;
 using namespace NTime;
 
+namespace NHeaderPropName {
+  extern const wchar_t *kInitialization;
+  extern const wchar_t *kLocale;
+  extern const wchar_t *kDecodingComment;
+  extern const wchar_t *kTimeType;
+  extern const wchar_t *kTimestampFromModTime;
+  extern const wchar_t *kTimestamp;
+  extern const wchar_t *kTimeZone;
+  extern const wchar_t *kFileInfoType;
+  extern const wchar_t *kFileInfoIzMode;
+  extern const wchar_t *kFileAttrib;
+  extern const wchar_t *kFilePermissions;
+  extern const wchar_t *kFileOwnership;
+  extern const wchar_t *kExtendedData;
+  extern const wchar_t *kExtendedDataAdded;
+  extern const wchar_t *kExtendedDataDeleted;
+}
+
 namespace NArchive {
 namespace NZip {
 
@@ -119,7 +137,13 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
     ui.NewData = IntToBool(newData);
     ui.IndexInArc = -1;
     ui.IndexInClient = i;
-    #ifdef ZIP_HEADER_REBEL
+    #ifndef ZIP_HEADER_REBEL
+    ui.UID = 0;
+    ui.GID = 0;
+    #else
+    ui.UID = m_HeaderInfo.UnixUID;
+    ui.GID = m_HeaderInfo.UnixGID;
+
     bool nameUnchanged = false;
     #endif
     bool existInArchive = (indexInArchive != (UInt32)(Int32)-1);
@@ -131,7 +155,7 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
           thereAreAesUpdates = true;
       }
       #ifdef ZIP_HEADER_REBEL
-      else if (updateInfo.ChangeHeaderOnly &&
+      else if (IntToBool(updateInfo.ChangeHeaderOnly) &&
                !m_HeaderLocale.HasEncodingCharset() &&
                !m_HeaderLocale.HasDecodingCharset())
         nameUnchanged = true;
@@ -151,6 +175,28 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
           return E_INVALIDARG;
         else
           ui.Attrib = prop.ulVal;
+      }
+      {
+        NCOM::CPropVariant prop;
+        RINOK(callback->GetProperty(i, kpidUID, &prop));
+        if (prop.vt != VT_EMPTY)
+        {
+          if (prop.vt != VT_UI4)
+            return E_INVALIDARG;
+          else
+            ui.UID = prop.ulVal;
+        }
+      }
+      {
+        NCOM::CPropVariant prop;
+        RINOK(callback->GetProperty(i, kpidGID, &prop));
+        if (prop.vt != VT_EMPTY)
+        {
+          if (prop.vt != VT_UI4)
+            return E_INVALIDARG;
+          else
+            ui.GID = prop.ulVal;
+        }
       }
 
       {
@@ -348,9 +394,8 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
     options.MethodSequence.Add(NFileHeader::NCompressionMethod::kStored);
 
   #ifdef ZIP_HEADER_REBEL
-  CHeaderRebel *headerRebel = new CHeaderRebel(&m_HeaderLocale, m_HeaderTimeType, &m_HeaderExtraAddedIDs);
-  if (m_WriteHeaderExtraAll)
-    headerRebel->SwitchWriteExtraAll(&m_HeaderExtraDeletedIDs);
+  CHeaderRebel *headerRebel =
+      new CHeaderRebel(&m_HeaderLocale, m_HeaderTimeType, m_HeaderFileInfoType, m_HeaderInfo);
   #endif
 
   return Update(
@@ -524,13 +569,14 @@ STDMETHODIMP CHandler::SetProperties(const wchar_t * const *names, const PROPVAR
   return S_OK;
 }
 
+#ifdef ZIP_HEADER_REBEL
 struct CHeaderTypePair
 {
   const wchar_t *Name;
   UInt32 Type;
 };
 
-static bool SetHeaderType(const wchar_t *s, const CHeaderTypePair *pairs, unsigned size, UInt32 &type)
+static HRESULT SetHeaderType(const wchar_t *s, const CHeaderTypePair *pairs, unsigned size, UInt16 &type)
 {
   UString name = s;
   name.MakeLower_Ascii();
@@ -539,13 +585,44 @@ static bool SetHeaderType(const wchar_t *s, const CHeaderTypePair *pairs, unsign
     if (name == pairs[i].Name)
     {
       type = pairs[i].Type;
-      return true;
+      return S_OK;
     }
   }
-  return false;
+  return E_INVALIDARG;
 }
 
-#ifdef ZIP_HEADER_REBEL
+static HRESULT SetHeaderAttribFlags(const wchar_t *s, UInt16 &flags)
+{
+  UString attrChars = s;
+  attrChars.MakeLower_Ascii();
+  flags = 0;
+  for (unsigned i = 0; i < attrChars.Len(); i++)
+  {
+    wchar_t c = attrChars[i];
+    if (c == L'r')
+      flags |= FILE_ATTRIBUTE_READONLY;
+    else if (c == L'a')
+      flags |= FILE_ATTRIBUTE_ARCHIVE;
+    else if (c == L's')
+      flags |= FILE_ATTRIBUTE_SYSTEM;
+    else if (c == L'h')
+      flags |= FILE_ATTRIBUTE_HIDDEN;
+    else if (c == L'i')
+      flags |= FILE_ATTRIBUTE_NOT_CONTENT_INDEXED;
+    else
+      return E_INVALIDARG;
+  }
+  return S_OK;
+}
+
+static const CHeaderTypePair kFileInfoTypePairs[] =
+{
+  { L"-", NFileInfoType::kDefault },
+  { L"win", NFileInfoType::kWindows },
+  { L"unix", NFileInfoType::kUnix },
+  { L"both", NFileInfoType::kUnixWithAttrib }
+};
+
 static const CHeaderTypePair kTimeTypePairs[] =
 {
   { L"-", NTimeType::kDefault },
@@ -554,37 +631,41 @@ static const CHeaderTypePair kTimeTypePairs[] =
   { L"dos", NTimeType::kDosTimeOnly },
   { L"0", NTimeType::kDosTimeZero }
 };
-#endif
 
 static const CHeaderTypePair kSetPropTypePairs[] =
 {
-  { L"lc", NSetPropType::kLocale },
-  { L"ts", NSetPropType::kTimestamp },
-  { L"tz", NSetPropType::kTimeZone }
-  #ifdef ZIP_HEADER_REBEL
-  , { L"dc", NSetPropType::kLocaleForComment }
-  , { L"t", NSetPropType::kTimeType }
-  , { L"ex", NSetPropType::kWriteExtraAll }
-  , { L"exa", NSetPropType::kExtraAddedID }
-  , { L"exd", NSetPropType::kExtraDeletedID }
-  #endif
+  { NHeaderPropName::kInitialization, NSetPropType::kInitialization },
+  { NHeaderPropName::kLocale, NSetPropType::kLocale },
+  { NHeaderPropName::kDecodingComment, NSetPropType::kDecodingComment },
+  { NHeaderPropName::kTimeType, NSetPropType::kTimeType },
+  { NHeaderPropName::kTimeZone, NSetPropType::kTimeZone },
+  { NHeaderPropName::kTimestamp, NSetPropType::kTimestamp },
+  { NHeaderPropName::kTimestampFromModTime, NSetPropType::kTimestampFromModTime },
+  { NHeaderPropName::kFileInfoType, NSetPropType::kFileInfoType },
+  { NHeaderPropName::kFileInfoIzMode, NSetPropType::kFileInfoIzMode },
+  { NHeaderPropName::kFileAttrib, NSetPropType::kFileAttrib },
+  { NHeaderPropName::kFilePermissions, NSetPropType::kFilePermissions },
+  { NHeaderPropName::kFileOwnership, NSetPropType::kFileOwnership },
+  { NHeaderPropName::kExtendedData, NSetPropType::kCopyExtraAll },
+  { NHeaderPropName::kExtendedDataAdded, NSetPropType::kExtraAddedID },
+  { NHeaderPropName::kExtendedDataDeleted, NSetPropType::kExtraDeletedID }
 };
+#endif
 
 STDMETHODIMP CHandler::SetHeaderProperties(const wchar_t * const *names, const HEADERPROP *props, UInt32 numProps)
 {
   InitHeaderProps();
 
+  #ifdef ZIP_HEADER_REBEL
   for (UInt32 i = 0; i < numProps; i++)
   {
-    UInt32 setPropType;
-    if (!SetHeaderType(names[i], kSetPropTypePairs, ARRAY_SIZE(kSetPropTypePairs), setPropType))
-      return E_INVALIDARG;
-
+    UInt16 setPropType;
+    RINOK(SetHeaderType(names[i], kSetPropTypePairs, ARRAY_SIZE(kSetPropTypePairs), setPropType));
     const HEADERPROP &prop = props[i];
 
-    for (unsigned j = 0; j < prop.size; j++)
+    for (unsigned paramIndex = 0; paramIndex < prop.size; paramIndex++)
     {
-      const PARVARIANT &param = prop.values[j];
+      const PARVARIANT &param = prop.values[paramIndex];
       if (param.vt == VT_EMPTY)
         continue;
       else if (param.vt != prop.type)
@@ -592,47 +673,87 @@ STDMETHODIMP CHandler::SetHeaderProperties(const wchar_t * const *names, const H
 
       switch (setPropType)
       {
+        case NSetPropType::kInitialization:
+          m_HeaderFileInfoType = NFileHeader::NFileInfoType::kUnixWithAttrib;
+          m_HeaderTimeType = NFileHeader::NTimeType::kNtfsExtra;
+          m_HeaderInfo.InitHeaderInfo();
+          m_HeaderLocale.InitLocaleSetting();
+          break;
         case NSetPropType::kLocale:
-          #ifdef ZIP_HEADER_REBEL
-          if (j == LC_DECODING)
+          if (paramIndex == LC_DECODING)
             m_HeaderLocale.SetDecodingLocale(param.bstrVal);
-          else if (j == LC_ENCODING)
+          else if (paramIndex == LC_ENCODING)
             m_HeaderLocale.SetEncodingLocale(param.bstrVal);
-          #endif
           break;
-        case NSetPropType::kTimestamp:
-          #ifdef ZIP_HEADER_REBEL
-          m_HeaderLocale.TimestampSettings[j].TimeSpecified = true;
-          m_HeaderLocale.TimestampSettings[j].TimeUpdate = param.filetime;
-          #endif
-          break;
-        case NSetPropType::kTimeZone:
-          #ifdef ZIP_HEADER_REBEL
-          m_HeaderLocale.TimestampSettings[j].TimeOffset = param.intVal;
-          #endif
-          break;
-        #ifdef ZIP_HEADER_REBEL
-        case NSetPropType::kLocaleForComment:
-          if (j == LC_DECODING)
-            m_HeaderLocale.SetDecodingLocale(param.bstrVal, true);
+        case NSetPropType::kDecodingComment:
+          m_HeaderLocale.SetDecodingLocale(param.bstrVal, true);
           break;
         case NSetPropType::kTimeType:
-          if (!SetHeaderType(param.bstrVal, kTimeTypePairs, ARRAY_SIZE(kTimeTypePairs), m_HeaderTimeType))
-            return E_INVALIDARG;
+          RINOK(SetHeaderType(param.bstrVal, kTimeTypePairs, ARRAY_SIZE(kTimeTypePairs), m_HeaderTimeType));
           break;
-        case NSetPropType::kWriteExtraAll:
-          RINOK(PROPVARIANT_to_bool(param, m_WriteHeaderExtraAll));
+        case NSetPropType::kTimeZone:
+          m_HeaderLocale.TimestampSettings[paramIndex].TimeOffset = param.intVal;
+          break;
+        case NSetPropType::kTimestamp:
+          m_HeaderLocale.TimestampSettings[paramIndex].TimeSpecified = true;
+          m_HeaderLocale.TimestampSettings[paramIndex].TimeUpdate = param.filetime;
+          break;
+        case NSetPropType::kTimestampFromModTime:
+          RINOK(PROPVARIANT_to_bool(param, m_HeaderInfo.SetTimestampFromModTime));
+          break;
+        case NSetPropType::kFileInfoType:
+          RINOK(SetHeaderType(param.bstrVal, kFileInfoTypePairs, ARRAY_SIZE(kFileInfoTypePairs), m_HeaderFileInfoType));
+          break;
+        case NSetPropType::kFileInfoIzMode:
+          RINOK(PROPVARIANT_to_bool(param, m_HeaderInfo.SetIzAttrib));
+          if (m_HeaderTimeType == NTimeType::kDefault)
+            m_HeaderTimeType = NTimeType::kUnixTimeExtra;
+          if (m_HeaderInfo.CopyUnixFileOwnership)
+          {
+            m_HeaderInfo.SetUnixFileOwnership = true;
+            m_HeaderInfo.CopyUnixFileOwnership = false;
+          }
+          break;
+        case NSetPropType::kFileAttrib:
+          RINOK(SetHeaderAttribFlags(param.bstrVal, m_HeaderInfo.AttribFlags[paramIndex]));
+          break;
+        case NSetPropType::kFilePermissions:
+          m_HeaderInfo.UnixModeBits = param.uintVal;
+          m_HeaderInfo.SetUnixModeBits = true;
+          break;
+        case NSetPropType::kFileOwnership:
+          if (prop.size == OWNER_PARSIZE)
+          {
+            if (paramIndex == OWNER_UID)
+            {
+              m_HeaderInfo.UnixUID = param.uintVal;
+              m_HeaderInfo.SetUnixUID = true;
+            }
+            else if (paramIndex == OWNER_GID)
+            {
+              m_HeaderInfo.UnixGID = param.uintVal;
+              m_HeaderInfo.SetUnixGID = true;
+            }
+            m_HeaderInfo.SetUnixFileOwnership = true;
+          }
+          else
+            RINOK(PROPVARIANT_to_bool(param, m_HeaderInfo.SetUnixFileOwnership));
+          m_HeaderInfo.CopyUnixFileOwnership = false;
+          break;
+        case NSetPropType::kCopyExtraAll:
+          RINOK(PROPVARIANT_to_bool(param, m_HeaderInfo.CopyExtraAll));
           break;
         case NSetPropType::kExtraAddedID:
-          m_HeaderExtraAddedIDs.Add(param.uintVal);
+          m_HeaderInfo.ExtraAddedIDs.Add(param.uintVal);
           break;
         case NSetPropType::kExtraDeletedID:
-          m_HeaderExtraDeletedIDs.Add(param.uintVal);
+          m_HeaderInfo.ExtraDeletedIDs.Add(param.uintVal);
           break;
-        #endif  /* ZIP_HEADER_REBEL */
       }
     }
   }
+  #endif  /* ZIP_HEADER_REBEL */
+
   return S_OK;
 }
 

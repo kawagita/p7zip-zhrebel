@@ -4,6 +4,7 @@
 
 #include "../../../Common/ComTry.h"
 #include "../../../Common/IntToString.h"
+#include "../../../Common/MyLinux.h"
 #include "../../../Common/StringConvert.h"
 #include "../../../Common/UTFConvert.h"
 
@@ -35,6 +36,8 @@ static const Byte kProps[] =
   kpidPackSize,
   kpidMTime,
   kpidPosixAttrib,
+  kpidUID,
+  kpidGID,
   kpidUser,
   kpidGroup,
   kpidSymLink,
@@ -339,7 +342,26 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
           prop = ft;
       }
       break;
-    case kpidPosixAttrib: prop = item->Mode; break;
+    case kpidPosixAttrib:
+    {
+      UInt32 mode = item->Mode;
+      if (item->IsSymLink())
+        mode |= MY_LIN_S_IFLNK;
+      else if (item->IsCharacter())
+        mode |= MY_LIN_S_IFCHR;
+      else if (item->IsBlock())
+        mode |= MY_LIN_S_IFBLK;
+      else if (item->IsFIFO())
+        mode |= MY_LIN_S_IFIFO;
+      else if (item->IsDir())
+        mode |= MY_LIN_S_IFDIR;
+      else
+        mode |= MY_LIN_S_IFREG;
+      prop = mode;
+      break;
+    }
+    case kpidUID:  prop = item->UID; break;
+    case kpidGID:  prop = item->GID; break;
     case kpidUser:  TarStringToUnicode(item->User, prop); break;
     case kpidGroup: TarStringToUnicode(item->Group, prop); break;
     case kpidSymLink:  if (item->LinkFlag == NFileHeader::NLinkFlag::kSymLink  && !item->LinkName.IsEmpty()) TarStringToUnicode(item->LinkName, prop); break;

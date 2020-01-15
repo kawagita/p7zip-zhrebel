@@ -6,21 +6,14 @@
 
 #include "Defs.h"
 #include "PropVariantConv.h"
-#ifdef UNIX_USE_WIN_TIME
 #include "TimeUtils.h"
-#endif
 
 #define UINT_TO_STR_2(c, val) { s[0] = (c); s[1] = (char)('0' + (val) / 10); s[2] = (char)('0' + (val) % 10); s += 3; }
 
 bool ConvertFileTimeToString(const FILETIME &ft, char *s, bool includeTime, bool includeSeconds, bool includeNanoSeconds) throw()
 {
-  #ifndef UNIX_USE_WIN_TIME
-  SYSTEMTIME st;
-  if (!BOOLToBool(FileTimeToSystemTime(&ft, &st)))
-  #else
-  NWindows::NTime::SYSTEMTIME2 st;
-  if (!FileTimeToSystemTime2(ft, st))
-  #endif
+  SYSTEMTIME2 st;
+  if (!NWindows::NTime::FileTimeToSystemTime2(ft, st))
   {
     *s = 0;
     return false;
@@ -55,7 +48,7 @@ bool ConvertFileTimeToString(const FILETIME &ft, char *s, bool includeTime, bool
       s[0] = (char)('0' + val / 10);
       s += 3;
       */
-      #ifdef UNIX_USE_WIN_TIME
+      #ifdef USE_NANO_SECONDS
       if (includeNanoSeconds)
       {
         DWORD ns = st.dwNanoSeconds;

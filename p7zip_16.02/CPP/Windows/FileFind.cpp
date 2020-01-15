@@ -4,6 +4,7 @@
 
 #include "FileFind.h"
 #include "FileIO.h"
+#include "TimeUtils.h"
 
 #include "../Common/StringConvert.h"
 
@@ -154,6 +155,7 @@ bool CFileInfo::IsDots() const throw()
   fi.CTime = fd.ftCreationTime; \
   fi.ATime = fd.ftLastAccessTime; \
   fi.MTime = fd.ftLastWriteTime; \
+  fi.UID = fi.GID = 0; \
   fi.Size = (((UInt64)fd.nFileSizeHigh) << 32) + fd.nFileSizeLow; \
   fi.IsDevice = false;
 
@@ -241,11 +243,14 @@ static int fillin_CFileInfo(CFileInfo &fileInfo,const char *filename,bool ignore
 
   fileInfo.Attrib |= FILE_ATTRIBUTE_UNIX_EXTENSION + ((stat_info.st_mode & 0xFFFF) << 16);
 
-  RtlSecondsSince1970ToFileTime( stat_info.st_ctime, &fileInfo.CTime );
-  RtlSecondsSince1970ToFileTime( stat_info.st_mtime, &fileInfo.MTime );
-  RtlSecondsSince1970ToFileTime( stat_info.st_atime, &fileInfo.ATime );
+  NTime::TimespecToFileTime( STAT_CTIME(stat_info), fileInfo.CTime );
+  NTime::TimespecToFileTime( STAT_MTIME(stat_info), fileInfo.MTime );
+  NTime::TimespecToFileTime( STAT_ATIME(stat_info), fileInfo.ATime );
 
   fileInfo.IsDevice = false;
+
+  fileInfo.UID = stat_info.st_uid;
+  fileInfo.GID = stat_info.st_gid;
 
   if (S_ISDIR(stat_info.st_mode)) {
     fileInfo.Size = 0;

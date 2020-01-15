@@ -43,7 +43,7 @@ static const Byte kHostOS =
   #endif
 
 static const Byte kMadeByHostOS = kHostOS;
-static const Byte kExtractHostOS = kHostOS;
+static const Byte kExtractHostOS = 0;
 
 static const Byte kMethodForDirectory = NFileHeader::NCompressionMethod::kStored;
 
@@ -73,6 +73,8 @@ static void SetFileHeader(
     item.Name = ui.Name;
     item.SetUtf8(ui.IsUtf8);
     item.ExternalAttrib = ui.Attrib;
+    item.UID = ui.UID;
+    item.GID = ui.GID;
     item.Time = ui.Time;
     item.Ntfs_MTime = ui.Ntfs_MTime;
     item.Ntfs_ATime = ui.Ntfs_ATime;
@@ -370,6 +372,8 @@ static HRESULT UpdateItemOldData(
 
     // we keep ExternalAttrib and some another properties from old archive
     // item.ExternalAttrib = ui.Attrib;
+    item.UID = ui.UID;
+    item.GID = ui.GID;
 
     item.Name = ui.Name;
     item.SetUtf8(ui.IsUtf8);

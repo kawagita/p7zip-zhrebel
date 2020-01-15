@@ -3,6 +3,12 @@
 #ifndef __ARCHIVE_ZIP_HEADER_H
 #define __ARCHIVE_ZIP_HEADER_H
 
+#ifdef ZIP_HEADER_REBEL
+#include <sys/types.h>
+
+#include "../../../Common/MyVector.h"
+#include "../../../Common/MyWindows.h"
+#endif
 #include "../../../Common/MyTypes.h"
 
 namespace NArchive {
@@ -83,6 +89,7 @@ namespace NFileHeader
       kNTFS = 0x0A,
       kStrongEncrypt = 0x17,
       kUnixTime = 0x5455,
+      kUnixFileOwnership = 0x7875,
       kIzUnicodeComment = 0x6375,
       kIzUnicodeName = 0x7075,
       kWzAES = 0x9901
@@ -92,23 +99,14 @@ namespace NFileHeader
   namespace NNtfsExtra
   {
     const UInt16 kTagTime = 1;
+    #ifndef ZIP_HEADER_REBEL
     enum
     {
       kMTime = 0,
       kATime,
       kCTime
     };
-  }
-
-  namespace NUnixTime
-  {
-    const unsigned kNumFields = 3;
-    enum
-    {
-      kMTime = 0,
-      kATime,
-      kCTime
-    };
+    #endif
   }
 
   namespace NFlags
@@ -183,25 +181,80 @@ namespace NFileHeader
       kDosTimeZero
     };
   }
-  #endif
+
+  namespace NFileInfoType
+  {
+    const unsigned kWithAttribMask = 1 << 0;
+    const unsigned kUnixMask = 1 << 1;
+    enum
+    {
+      kDefault = 0,
+      kWindows = 1,
+      kUnix = 2,
+      kUnixWithAttrib = 3
+    };
+  }
 
   namespace NSetPropType
   {
     enum
     {
-      kLocale = 0,
+      kInitialization = 0,
+      kLocale,
+      kDecodingComment,
+      kTimeType,
+      kTimeZone,
+      kTimestampFromModTime,
       kTimestamp,
-      kTimeZone
-      #ifdef ZIP_HEADER_REBEL
-      , kLocaleForComment
-      , kTimeType
-      , kWriteExtraAll
-      , kExtraAddedID
-      , kExtraDeletedID
-      #endif
+      kFileInfoType,
+      kFileInfoIzMode,
+      kFileAttrib,
+      kFilePermissions,
+      kFileOwnership,
+      kCopyExtraAll,
+      kExtraAddedID,
+      kExtraDeletedID
     };
   }
+  #endif
 }
+
+#ifdef ZIP_HEADER_REBEL
+struct CFileHeaderInfo
+{
+  UInt16 AttribFlags[ATTR_PARSIZE];
+  UInt16 UnixModeBits;
+  UInt32 UnixUID;
+  UInt32 UnixGID;
+  bool SetTimestampFromModTime;
+  bool SetIzAttrib;
+  bool SetUnixModeBits;
+  bool SetUnixUID;
+  bool SetUnixGID;
+  bool SetUnixFileOwnership;
+  bool CopyUnixFileOwnership;
+  bool CopyExtraAll;
+  CObjectVector<UInt16> ExtraAddedIDs;
+  CObjectVector<UInt16> ExtraDeletedIDs;
+
+  void InitHeaderInfo()
+  {
+    for (unsigned i = 0; i < ATTR_PARSIZE; i++)
+      AttribFlags[i] = 0;
+    UnixModeBits = 0;
+    UnixUID = getuid();
+    UnixGID = getgid();
+    SetTimestampFromModTime = false;
+    SetIzAttrib = false;
+    SetUnixModeBits = false;
+    SetUnixFileOwnership = false;
+    CopyUnixFileOwnership = true;
+    CopyExtraAll = false;
+    ExtraAddedIDs.Clear();
+    ExtraDeletedIDs.Clear();
+  }
+};
+#endif
 
 }}
 

@@ -2,6 +2,9 @@
 
 #include "StdAfx.h"
 
+#include <sys/stat.h>
+
+#include "../../../Common/MyLinux.h"
 #include "../../../Common/StringConvert.h"
 #include "../../../Windows/TimeUtils.h"
 
@@ -23,11 +26,13 @@ UInt32 CHeaderExtraStorage::GetLocalExtraSize(const CItemOut &item) const
     if (item.UnixAcTimeIsDefined) extraSize += k_UnixTimeExtra_EpochTimeLength;
     if (item.UnixCrTimeIsDefined) extraSize += k_UnixTimeExtra_EpochTimeLength;
   }
+  if (m_StoreUnixFileOwnershipField)
+    extraSize += 4 + k_UnixFileOwnershipExtra_DataBlockLength;
   return extraSize;
 }
 
 static void SetExtraSubBlocks(const CObjectVector<CExtraSubBlock> &subBlocks,
-    const CObjectVector<UInt16> &exclusiveIDs, bool copyAll, CExtraBlock &extra)
+    const CObjectVector<UInt16> &exclusiveIDs, bool copyAll, bool copyUnixFileOwnership, CExtraBlock &extra)
 {
   if (!exclusiveIDs.IsEmpty() || copyAll)
   {
@@ -42,6 +47,9 @@ static void SetExtraSubBlocks(const CObjectVector<CExtraSubBlock> &subBlocks,
         case NExtraID::kUnixTime:
         case NExtraID::kWzAES:
           break;
+        case NExtraID::kUnixFileOwnership:
+          if (!copyUnixFileOwnership)
+            break;
         default:
         {
           bool specified = false;
@@ -67,13 +75,14 @@ static void SetExtraSubBlocks(const CObjectVector<CExtraSubBlock> &subBlocks,
   }
 }
 
-void CHeaderExtraStorage::CopyExtraSubBlocks(const CItem &item, const CObjectVector<UInt16> &exclusiveIDs, bool copyAll)
+void CHeaderExtraStorage::CopyExtraSubBlocks(const CItem &item,
+    const CObjectVector<UInt16> &exclusiveIDs, bool copyAll, bool copyUnixFileOwnership)
 {
   m_LocalExtraUnknown.Clear();
   m_CentralExtraUnknown.Clear();
   m_HasWzAesField = item.LocalExtra.GetWzAes(m_WzAesField);
-  SetExtraSubBlocks(item.LocalExtra.SubBlocks, exclusiveIDs, copyAll, m_LocalExtraUnknown);
-  SetExtraSubBlocks(item.LocalExtra.SubBlocks, exclusiveIDs, copyAll, m_CentralExtraUnknown);
+  SetExtraSubBlocks(item.LocalExtra.SubBlocks, exclusiveIDs, copyAll, copyUnixFileOwnership, m_LocalExtraUnknown);
+  SetExtraSubBlocks(item.LocalExtra.SubBlocks, exclusiveIDs, copyAll, copyUnixFileOwnership, m_CentralExtraUnknown);
 }
 
 void CHeaderExtraStorage::RestoreExtraSubBlocks(CItemOut &item) const
@@ -86,6 +95,13 @@ void CHeaderExtraStorage::RestoreExtraSubBlocks(CItemOut &item) const
     m_UnixTimeField.SetSubBlock(sb, true);
     item.LocalExtra.AddSubBlock(sb);
     m_UnixTimeField.SetSubBlock(sb, false);
+    item.CentralExtra.AddSubBlock(sb);
+  }
+  if (m_StoreUnixFileOwnershipField)
+  {
+    CExtraSubBlock sb;
+    m_UnixFileOwnershipField.SetSubBlock(sb);
+    item.LocalExtra.AddSubBlock(sb);
     item.CentralExtra.AddSubBlock(sb);
   }
   item.LocalExtra.AddExtra(m_LocalExtraUnknown);
@@ -101,6 +117,48 @@ void CHeaderExtraStorage::RestoreExtraWzAes(CItemOut &item) const
     item.LocalExtra.AddSubBlock(sb);
     item.CentralExtra.AddSubBlock(sb);
   }
+}
+
+static const UInt16 kFileAttribNotSettingMask = 0x0000;
+static const UInt16 kFileAttribNotUnsettingMask = 0xffff;
+
+static const UInt16 kReadPermissionBits = MY_LIN_S_IRUSR | MY_LIN_S_IRGRP | MY_LIN_S_IROTH;
+static const UInt16 kWritePermissionBits = MY_LIN_S_IWUSR | MY_LIN_S_IWGRP | MY_LIN_S_IWOTH;
+static const UInt16 kExecutePermissionBits = MY_LIN_S_IXUSR | MY_LIN_S_IXGRP | MY_LIN_S_IXOTH;
+
+CHeaderRebel::CHeaderRebel(
+    CHeaderLocale *headerLocale,
+    UInt16 timeType,
+    UInt16 fileInfoType,
+    const CFileHeaderInfo &headerInfo)
+{
+  m_HeaderLocale = headerLocale;
+  m_FileTimeType = timeType;
+  m_FileInfoType = fileInfoType;
+  if ((m_FileInfoType & NFileInfoType::kWithAttribMask) != 0)
+  {
+    m_FileAttribSettingMask = headerInfo.AttribFlags[ATTR_SETTING];
+    m_FileAttribUnsettingMask = ~headerInfo.AttribFlags[ATTR_UNSETTING];
+  }
+  else
+  {
+    m_FileAttribSettingMask = kFileAttribNotSettingMask;
+    m_FileAttribUnsettingMask = kFileAttribNotUnsettingMask;
+  }
+  m_UnixModeBits = headerInfo.UnixModeBits & (~MY_LIN_S_IFMT);
+  mode_t mask = umask(0);
+  umask(mask);
+  _UnixModeMask = ~mask;
+  m_SetTimestampFromModTime = headerInfo.SetTimestampFromModTime;
+  m_SetIzAttrib = headerInfo.SetIzAttrib;
+  m_SetUnixModeBits = headerInfo.SetUnixModeBits;
+  m_SetUnixFileOwnership = headerInfo.SetUnixFileOwnership;
+  m_CopyUnixFileOwnership = headerInfo.CopyUnixFileOwnership;
+  m_CopyExtraAll = headerInfo.CopyExtraAll;
+  if (m_CopyExtraAll)
+    m_ExtraExclusiveIDs = &headerInfo.ExtraDeletedIDs;
+  else
+    m_ExtraExclusiveIDs = &headerInfo.ExtraAddedIDs;
 }
 
 void CHeaderRebel::SetLocalHeaderLocale(CItemOut &item)
@@ -153,34 +211,34 @@ static void SetUnixTimeExtraField(const FILETIME &ft, UInt32 index, CHeaderExtra
   extraStorage.SetUnixTimeExtra(index, epochTime);
 }
 
-void CHeaderRebel::ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraStorage)
+void CHeaderRebel::ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraStorage) const
 {
   bool NtfsTimeIsStored = false;
   bool UnixTimeIsStored = false;
   bool UnixAcTimeIsStored = false;
   bool UnixCrTimeIsStored = false;
-  if (m_TimeType != NTimeType::kDosTimeZero)
+  if (m_FileTimeType != NTimeType::kDosTimeZero)
   {
-    if (m_TimeType == NTimeType::kDefault)
+    if (m_FileTimeType == NTimeType::kDefault)
     {
       NtfsTimeIsStored = item.NtfsTimeIsDefined;
       UnixTimeIsStored = item.UnixTimeIsDefined;
       UnixAcTimeIsStored = item.UnixAcTimeIsDefined;
       UnixCrTimeIsStored = item.UnixCrTimeIsDefined;
     }
-    else if (m_TimeType == NTimeType::kNtfsExtra)
+    else if (m_FileTimeType == NTimeType::kNtfsExtra)
       NtfsTimeIsStored = true;
-    else if (m_TimeType == NTimeType::kUnixTimeExtra)
+    else if (m_FileTimeType == NTimeType::kUnixTimeExtra)
     {
       UnixTimeIsStored= true;
       UnixAcTimeIsStored= true;
     }
-
-    m_HeaderLocale->UpdateTimestamp(item);
-
+    m_HeaderLocale->AdjustTimestamp(item);
     if (NtfsTimeIsStored)
     {
-      if (!item.NtfsTimeIsDefined)
+      if (m_SetTimestampFromModTime)
+        item.Ntfs_CTime = item.Ntfs_ATime = item.Ntfs_MTime;
+      else if (!item.NtfsTimeIsDefined)
       {
         if (!item.UnixAcTimeIsDefined) item.Ntfs_ATime = item.Ntfs_MTime;
         if (!item.UnixCrTimeIsDefined) item.Ntfs_CTime = item.Ntfs_MTime;
@@ -188,11 +246,13 @@ void CHeaderRebel::ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraS
     }
     else if (UnixTimeIsStored)
     {
-      if (!item.NtfsTimeIsDefined && !item.UnixAcTimeIsDefined)
+      if (m_SetTimestampFromModTime)
+        item.Ntfs_CTime = item.Ntfs_ATime = item.Ntfs_MTime;
+      else if (!item.NtfsTimeIsDefined && !item.UnixAcTimeIsDefined)
         item.Ntfs_ATime = item.Ntfs_MTime;
-      SetUnixTimeExtraField(item.Ntfs_MTime, NUnixTime::kMTime, extraStorage);
-      if (UnixAcTimeIsStored) SetUnixTimeExtraField(item.Ntfs_ATime, NUnixTime::kATime, extraStorage);
-      if (UnixCrTimeIsStored) SetUnixTimeExtraField(item.Ntfs_CTime, NUnixTime::kCTime, extraStorage);
+      SetUnixTimeExtraField(item.Ntfs_MTime, TS_MODTIME, extraStorage);
+      if (UnixAcTimeIsStored) SetUnixTimeExtraField(item.Ntfs_ATime, TS_ACTIME, extraStorage);
+      if (UnixCrTimeIsStored) SetUnixTimeExtraField(item.Ntfs_CTime, TS_CRTIME, extraStorage);
     }
   }
   else
@@ -201,6 +261,60 @@ void CHeaderRebel::ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraS
   item.UnixTimeIsDefined = UnixTimeIsStored;
   item.UnixAcTimeIsDefined = UnixAcTimeIsStored;
   item.UnixCrTimeIsDefined = UnixCrTimeIsStored;
+
+  Byte hostOS = item.MadeByVersion.HostOS;
+  if (m_FileInfoType == NFileInfoType::kWindows)
+    hostOS = NHostOS::kFAT;
+  else if ((m_FileInfoType & NFileInfoType::kUnixMask) != 0)
+    hostOS = NHostOS::kUnix;
+  item.MadeByVersion.HostOS = hostOS;
+
+  bool changeAttrib = (m_FileInfoType & NFileInfoType::kWithAttribMask) != 0;
+  UInt16 attrib = (item.ExternalAttrib | m_FileAttribSettingMask) & m_FileAttribUnsettingMask;
+  UInt16 mode = item.ExternalAttrib >> 16;
+  switch (hostOS)
+  {
+    case NHostOS::kFAT:
+    case NHostOS::kNTFS:
+      if (m_FileAttribSettingMask != kFileAttribNotSettingMask ||
+          m_FileAttribUnsettingMask != kFileAttribNotUnsettingMask)
+        changeAttrib = true;
+      break;
+    case NHostOS::kUnix:
+      if ((mode & (~MY_LIN_S_IFMT)) == 0)
+      {
+        mode = kReadPermissionBits;
+        if ((attrib & FILE_ATTRIBUTE_READONLY) == 0)
+          mode |= kWritePermissionBits;
+        if (item.IsDir())
+          mode |= MY_LIN_S_IFDIR | kExecutePermissionBits;
+        else
+          mode |= MY_LIN_S_IFREG;
+        mode &= _UnixModeMask;
+      }
+      if (m_SetUnixModeBits)
+        mode &= MY_LIN_S_IFMT;  // set only bits except for file or device type
+      mode |= m_UnixModeBits;
+      if (m_SetUnixFileOwnership)
+        extraStorage.SetUnixFileOwnershipExtra(item.UID, item.GID);
+      break;
+  }
+  if (changeAttrib)
+  {
+    if (item.IsDir())
+      attrib |= FILE_ATTRIBUTE_DIRECTORY;
+    else if ((attrib & FILE_ATTRIBUTE_WIN_MASK) == 0)
+      attrib |= FILE_ATTRIBUTE_NORMAL;
+    if (m_FileInfoType == NFileInfoType::kWindows)
+      mode = 0;
+    else if (m_FileInfoType == NFileInfoType::kUnixWithAttrib)
+      attrib |= FILE_ATTRIBUTE_UNIX_EXTENSION;
+  }
+  else if (m_FileInfoType == NFileInfoType::kUnix)
+    attrib = 0;
+  if (m_SetIzAttrib)
+    attrib &= ~(FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_UNIX_EXTENSION);
+  item.ExternalAttrib = attrib | ((UInt32)mode << 16);
 }
 
 }}

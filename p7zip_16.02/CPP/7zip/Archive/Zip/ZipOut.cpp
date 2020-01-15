@@ -42,11 +42,9 @@ void COutArchive::PrepareWriteCompressedDataZip64(unsigned fileNameLen, bool isZ
 {
   m_IsZip64 = isZip64;
   #ifndef ZIP_HEADER_REBEL
-  m_ExtraSize =
-  #else
-  m_ExtraSize +=
+  m_ExtraSize = 0;
   #endif
-      isZip64 ? (4 + 8 + 8) : 0;
+  m_ExtraSize += isZip64 ? (4 + 8 + 8) : 0;
   if (aesEncryption)
     m_ExtraSize += 4 + k_WzAesExtra_Size;
   m_LocalFileHeaderSize = kLocalHeaderSize + fileNameLen + m_ExtraSize;

@@ -117,12 +117,11 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
           ui.Mode =
                 MY_LIN_S_IRWXO
               | MY_LIN_S_IRWXG
-              | MY_LIN_S_IRWXU
-              | (ui.IsDir ? MY_LIN_S_IFDIR : MY_LIN_S_IFREG);
+              | MY_LIN_S_IRWXU;
         else if (prop.vt != VT_UI4)
           return E_INVALIDARG;
         else
-          ui.Mode = prop.ulVal;
+          ui.Mode = prop.ulVal & (~ MY_LIN_S_IFMT);
       }
 
       {
