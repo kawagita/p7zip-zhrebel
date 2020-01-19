@@ -571,7 +571,7 @@ STDMETHOD CArchiveUpdateCallback::GetUpdateInfo(struct CUpdateInfo *updateInfo)
 {
   if (updateInfo)
   {
-    updateInfo->ChangeHeaderOnly = BoolToInt(false);
+    updateInfo->OpType = NUpdateOpType::kChangeData;
     updateInfo->PathStrippedSize = 0;
     NCOM::CPropVariant propPathPrefix;
     propPathPrefix.Detach(&updateInfo->PathPrefix);

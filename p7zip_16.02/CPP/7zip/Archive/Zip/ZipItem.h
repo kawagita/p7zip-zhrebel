@@ -336,9 +336,6 @@ public:
   UInt16 InternalAttrib;
   UInt32 ExternalAttrib;
   
-  UInt32 UID;
-  UInt32 GID;
-
   UInt64 LocalHeaderPos;
   
   CExtraBlock CentralExtra;

@@ -563,6 +563,7 @@ static HRESULT Compress(
   CRecordVector<CUpdatePair2> updatePairs2;
 
   UStringVector newNames;
+  UInt32 updateOpType = NUpdateOpType::kChangeData;
 
   if (options.RenamePairs.Size() != 0)
   {
@@ -617,25 +618,26 @@ static HRESULT Compress(
       }
       updatePairs2.Add(up2);
     }
+    updateOpType = NUpdateOpType::kRename;
   }
-  else if (options.HeaderChangedOnly)
+  else if (options.HeaderChangedTarget != NHeaderChangedTarget::kNone)
   {
     FOR_VECTOR (i, arcItems)
     {
       const CArcItem &ai = arcItems[i];
       CUpdatePair2 up2;
       up2.SetAs_NoChangeArcItem(ai.IndexInServer);
-      switch (options.HeaderChangedMode)
+      switch (options.HeaderChangedTarget)
       {
-        case NHeaderChangedMode::kSetCensorPathHeader:
+        case NHeaderChangedTarget::kCensorPath:
           if (ai.Censored)
             up2.NewProps = true;
           break;
-        case NHeaderChangedMode::kSetDirectoryHeaderOnly:
+        case NHeaderChangedTarget::kDirectory:
           if (ai.IsDir)
             up2.NewProps = true;
           break;
-        case NHeaderChangedMode::kSetFileHeaderOnly:
+        case NHeaderChangedTarget::kFile:
           if (!ai.IsDir)
             up2.NewProps = true;
           break;
@@ -645,6 +647,7 @@ static HRESULT Compress(
       }
       updatePairs2.Add(up2);
     }
+    updateOpType = NUpdateOpType::kChangeHeaderOnly;
   }
   else
   {
@@ -665,8 +668,8 @@ static HRESULT Compress(
       else if (updatePairs2[i].NewProps)
         numHeaders++;
     }
-    RINOK(options.HeaderChangedOnly ?
-          callback->SetNumHeaders(numHeaders) : callback->SetNumItems(numItems));
+    RINOK(updateOpType == NUpdateOpType::kChangeData ?
+          callback->SetNumItems(numItems) : callback->SetNumHeaders(numHeaders));
   }
   
   CArchiveUpdateCallback *updateCallbackSpec = new CArchiveUpdateCallback;
@@ -693,11 +696,12 @@ static HRESULT Compress(
   updateCallbackSpec->ArcItems = &arcItems;
   updateCallbackSpec->UpdatePairs = &updatePairs2;
 
+  updateCallbackSpec->OpType = updateOpType;
   updateCallbackSpec->PathStrippedSize = options.PathStrippedSize;
   updateCallbackSpec->PathPrefix = options.PathPrefix;
   updateCallbackSpec->Comment = options.Comment;
 
-  updateCallbackSpec->ChangeHeaderOnly = options.HeaderChangedOnly;
+  updateCallbackSpec->HeaderChangeMode = options.HeaderChangeMode;
 
   if (options.RenamePairs.Size() != 0)
     updateCallbackSpec->NewNames = &newNames;
@@ -1036,7 +1040,7 @@ HRESULT UpdateArchive(
   if (types.Size() > 1)
     return E_NOTIMPL;
 
-  bool changeHeaderOnly = options.HeaderChangedOnly;
+  bool changeHeaderOnly = (options.HeaderChangedTarget != NHeaderChangedTarget::kNone);
   bool renameMode = !options.RenamePairs.IsEmpty();
   if (renameMode)
   {

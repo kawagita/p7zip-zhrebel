@@ -61,8 +61,10 @@ CArchiveUpdateCallback::CArchiveUpdateCallback():
     StoreHardLinks(false),
     StoreSymLinks(false),
     
-    ChangeHeaderOnly(false),
+    OpType(NUpdateOpType::kChangeData),
     PathStrippedSize(0),
+    
+    HeaderChangeMode(NUpdate::NHeaderChangeMode::kAsk),
     
     ProcessedItemsStatuses(NULL)
 {
@@ -118,7 +120,7 @@ STDMETHODIMP CArchiveUpdateCallback::GetUpdateInfo(struct CUpdateInfo *updateInf
   COM_TRY_BEGIN
   if (updateInfo)
   {
-    updateInfo->ChangeHeaderOnly = BoolToInt(ChangeHeaderOnly);
+    updateInfo->OpType = OpType;
     updateInfo->PathStrippedSize = PathStrippedSize;
     NCOM::CPropVariant propPathPrefix;
     if (!PathPrefix.IsEmpty())
@@ -749,6 +751,25 @@ STDMETHODIMP CArchiveUpdateCallback::CryptoGetTextPassword(BSTR *password)
 {
   COM_TRY_BEGIN
   return Callback->CryptoGetTextPassword(password);
+  COM_TRY_END
+}
+
+STDMETHODIMP CArchiveUpdateCallback::CryptoAskHeaderChange(const wchar_t *name, const FILETIME *time, Int32 *answer)
+{
+  COM_TRY_BEGIN
+  switch (HeaderChangeMode)
+  {
+    case NUpdate::NHeaderChangeMode::kChange: *answer = NUpdateAnswer::kYesToAll; break;
+    case NUpdate::NHeaderChangeMode::kSkip:   *answer = NUpdateAnswer::kNoToAll; break;
+    case NUpdate::NHeaderChangeMode::kAsk:
+      RINOK(Callback->CryptoAskHeaderChange(name, time, answer));
+      if (*answer == NUpdateAnswer::kYesToAll)
+        HeaderChangeMode = NUpdate::NHeaderChangeMode::kChange;
+      else if (*answer == NUpdateAnswer::kNoToAll)
+        HeaderChangeMode = NUpdate::NHeaderChangeMode::kSkip;
+      break;
+  }
+  return S_OK;
   COM_TRY_END
 }
 

@@ -889,6 +889,7 @@ const wchar_t *kFileInfoIzMode = L"iz";
 const wchar_t *kFileAttrib = L"attrib";
 const wchar_t *kFilePermissions = L"mod";
 const wchar_t *kFileOwnership = L"own";
+const wchar_t *kDataDescriptor = L"dd";
 const wchar_t *kExtendedData = L"ex";
 const wchar_t *kExtendedDataAdded = L"exa";
 const wchar_t *kExtendedDataDeleted = L"exd";
@@ -913,6 +914,7 @@ static const CHeaderPropertyForm kHeaderPropertyForms[] =
   { NHeaderPropName::kFilePermissions, HT_FILE_PERMISSIONS, 0 },
   { NHeaderPropName::kFileOwnership, HT_EXTENDED_DATA_SWITCH,
     ARRAY_SIZE(kFileOwnershipParamNames), kFileOwnershipParamNames, HT_FILE_OWNERSHIP },
+  { NHeaderPropName::kDataDescriptor, HT_EXTENDED_DATA_SWITCH, 0 },
   { NHeaderPropName::kExtendedData, HT_EXTENDED_DATA_SWITCH, 0 },
   { NHeaderPropName::kExtendedDataAdded, HT_EXTENDED_DATA, 0 },
   { NHeaderPropName::kExtendedDataDeleted, HT_EXTENDED_DATA, 0 }
@@ -1377,18 +1379,23 @@ void CArcCmdLineParser::Parse2(CArcCmdLineOptions &options)
 
     if (isUpdateHeaderOnly)
     {
+      NHeaderChangedTarget::EEnum headerChangedTarget = NHeaderChangedTarget::kAll;
       if (options.Censor.CensorPaths.IsEmpty())
       {
-        updateOptions.HeaderChangedMode = NHeaderChangedMode::kSetAllHeaders;
         if (parser[NKey::kUpdateDirectoryHeaderOnly].ThereIs)
         {
           if (!parser[NKey::kUpdateFileHeaderOnly].ThereIs)
-            updateOptions.HeaderChangedMode = NHeaderChangedMode::kSetDirectoryHeaderOnly;
+            headerChangedTarget = NHeaderChangedTarget::kDirectory;
         }
         else if (parser[NKey::kUpdateFileHeaderOnly].ThereIs)
-          updateOptions.HeaderChangedMode = NHeaderChangedMode::kSetFileHeaderOnly;
+          headerChangedTarget = NHeaderChangedTarget::kFile;
       }
-      updateOptions.HeaderChangedOnly = true;
+      else
+        headerChangedTarget = NHeaderChangedTarget::kCensorPath;
+      updateOptions.HeaderChangedTarget = headerChangedTarget;
+
+      if (options.YesToAll)
+        updateOptions.HeaderChangeMode = NUpdate::NHeaderChangeMode::kChange;
     }
     
     updateOptions.MethodMode.Properties = options.Properties;

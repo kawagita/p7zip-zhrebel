@@ -60,6 +60,8 @@ private:
   #ifdef ZIP_HEADER_REBEL
   UInt16 m_HeaderFileInfoType;
   UInt16 m_HeaderTimeType;
+  bool m_HeaderIzMode;
+  CBoolPair m_HeaderUseDescriptor;
   CFileHeaderInfo m_HeaderInfo;
   CHeaderLocale m_HeaderLocale;
   #endif
@@ -84,6 +86,8 @@ private:
     #ifdef ZIP_HEADER_REBEL
     m_HeaderFileInfoType = NFileHeader::NFileInfoType::kDefault;
     m_HeaderTimeType = NFileHeader::NTimeType::kDefault;
+    m_HeaderIzMode = false;
+    m_HeaderUseDescriptor.Init();
     m_HeaderInfo.InitHeaderInfo();
     m_HeaderLocale.InitLocaleSetting();
     #endif

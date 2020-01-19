@@ -51,6 +51,9 @@ class COutArchive
   UInt32 m_LocalFileHeaderSize;
   UInt32 m_ExtraSize;
   bool m_IsZip64;
+  #ifdef ZIP_HEADER_REBEL
+  bool m_WriteHeaderIzMode;
+  #endif
 
   void SeekToRelatPos(UInt64 offset);
 
@@ -66,12 +69,18 @@ class COutArchive
   }
 
   void WriteExtra(const CExtraBlock &extra);
-  void WriteCommonItemInfo(const CLocalItem &item, bool isZip64);
+  void WriteCommonItemInfo(const CLocalItem &item, bool isZip64, bool toLocal = false);
   void WriteCentralHeader(const CItemOut &item);
 
   void PrepareWriteCompressedDataZip64(unsigned fileNameLen, bool isZip64, bool aesEncryption);
 
 public:
+  #ifdef ZIP_HEADER_REBEL
+  COutArchive(bool writeHeaderIzMode):
+      m_WriteHeaderIzMode(writeHeaderIzMode)
+      {}
+  #endif
+
   HRESULT Create(IOutStream *outStream);
   
   void MoveCurPos(UInt64 distanceToMove);
@@ -89,6 +98,10 @@ public:
     WriteLocalHeader(item);
     SeekToCurPos();
   }
+
+  #ifdef ZIP_HEADER_REBEL
+  void WriteDataDescriptor(const CLocalItem &item);
+  #endif
 
   void WriteCentralDir(const CObjectVector<CItemOut> &items, const CByteBuffer *comment);
 

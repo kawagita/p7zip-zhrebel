@@ -41,6 +41,7 @@ namespace NHeaderPropName {
   extern const wchar_t *kFileAttrib;
   extern const wchar_t *kFilePermissions;
   extern const wchar_t *kFileOwnership;
+  extern const wchar_t *kDataDescriptor;
   extern const wchar_t *kExtendedData;
   extern const wchar_t *kExtendedDataAdded;
   extern const wchar_t *kExtendedDataDeleted;
@@ -118,6 +119,16 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
   }
   CUpdateInfo updateInfo;
   RINOK(callback->GetUpdateInfo(&updateInfo));
+  #ifdef ZIP_HEADER_REBEL
+  bool updateHeaderOnly = false;
+  CMyComPtr<ICryptoAskHeaderChange> askUpdateHeader;
+  if (updateInfo.OpType == NUpdateOpType::kChangeHeaderOnly)
+  {
+    CMyComPtr<IArchiveUpdateCallback> udateCallBack2(callback);
+    udateCallBack2.QueryInterface(IID_ICryptoAskHeaderChange, &askUpdateHeader);
+    updateHeaderOnly = true;
+  }
+  #endif
 
   CObjectVector<CUpdateItem> updateItems;
   bool thereAreAesUpdates = false;
@@ -137,33 +148,29 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
     ui.NewData = IntToBool(newData);
     ui.IndexInArc = -1;
     ui.IndexInClient = i;
-    #ifndef ZIP_HEADER_REBEL
-    ui.UID = 0;
-    ui.GID = 0;
-    #else
-    ui.UID = m_HeaderInfo.UnixUID;
-    ui.GID = m_HeaderInfo.UnixGID;
-
+    #ifdef ZIP_HEADER_REBEL
     bool nameUnchanged = false;
+    bool encrypted = false;
     #endif
     bool existInArchive = (indexInArchive != (UInt32)(Int32)-1);
     if (existInArchive)
     {
-      if (newData)
+      if (ui.NewData)
       {
         if (m_Items[indexInArchive].IsAesEncrypted())
           thereAreAesUpdates = true;
       }
       #ifdef ZIP_HEADER_REBEL
-      else if (IntToBool(updateInfo.ChangeHeaderOnly) &&
+      else if (updateHeaderOnly &&
                !m_HeaderLocale.HasEncodingCharset() &&
                !m_HeaderLocale.HasDecodingCharset())
         nameUnchanged = true;
+      encrypted = m_Items[indexInArchive].IsEncrypted();
       #endif
       ui.IndexInArc = indexInArchive;
     }
 
-    if (IntToBool(newProps))
+    if (ui.NewProps)
     {
       UString name;
       {
@@ -176,6 +183,11 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
         else
           ui.Attrib = prop.ulVal;
       }
+      #ifdef ZIP_HEADER_REBEL
+      if (m_HeaderInfo.SetUnixUID)
+        ui.UID = m_HeaderInfo.UnixUID;
+      else
+      #endif
       {
         NCOM::CPropVariant prop;
         RINOK(callback->GetProperty(i, kpidUID, &prop));
@@ -186,7 +198,16 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
           else
             ui.UID = prop.ulVal;
         }
+        #ifdef ZIP_HEADER_REBEL
+        else
+          ui.UID = m_HeaderInfo.ProcUserID;
+        #endif
       }
+      #ifdef ZIP_HEADER_REBEL
+      if (m_HeaderInfo.SetUnixGID)
+        ui.GID = m_HeaderInfo.UnixGID;
+      else
+      #endif
       {
         NCOM::CPropVariant prop;
         RINOK(callback->GetProperty(i, kpidGID, &prop));
@@ -197,6 +218,10 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
           else
             ui.GID = prop.ulVal;
         }
+        #ifdef ZIP_HEADER_REBEL
+        else
+          ui.GID = m_HeaderInfo.ProcGroupID;
+        #endif
       }
 
       {
@@ -325,8 +350,23 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
       else
         ui.Commented = false;
       */
+      #ifdef ZIP_HEADER_REBEL
+      if (!ui.IsDir)
+      {
+        if (updateHeaderOnly && encrypted)
+        {
+          Int32 answer = NUpdateAnswer::kNo;
+          if (askUpdateHeader)
+            RINOK(askUpdateHeader->CryptoAskHeaderChange(name.Ptr(), &ui.Ntfs_MTime, &answer));
+          if (answer != NUpdateAnswer::kYes &&
+              answer != NUpdateAnswer::kYesToAll)
+            ui.NewProps = ui.NewData = false;
+        }
+        ui.UseDescriptor = m_HeaderUseDescriptor.Val;
+      }
+      #endif
     }
-    if (IntToBool(newData))
+    if (ui.NewData)
     {
       UInt64 size = 0;
       if (!ui.IsDir)
@@ -404,7 +444,7 @@ STDMETHODIMP CHandler::UpdateItems(ISequentialOutStream *outStream, UInt32 numIt
       m_Archive.IsOpen() ? &m_Archive : NULL, _removeSfxBlock,
       &options,
       #ifdef ZIP_HEADER_REBEL
-      headerRebel,
+      headerRebel, m_HeaderIzMode,
       #endif
       callback);
  
@@ -591,7 +631,7 @@ static HRESULT SetHeaderType(const wchar_t *s, const CHeaderTypePair *pairs, uns
   return E_INVALIDARG;
 }
 
-static HRESULT SetHeaderAttribFlags(const wchar_t *s, UInt16 &flags)
+static HRESULT SetHeaderAttribFlags(const wchar_t *s, UInt32 &flags)
 {
   UString attrChars = s;
   attrChars.MakeLower_Ascii();
@@ -600,15 +640,15 @@ static HRESULT SetHeaderAttribFlags(const wchar_t *s, UInt16 &flags)
   {
     wchar_t c = attrChars[i];
     if (c == L'r')
-      flags |= FILE_ATTRIBUTE_READONLY;
+      flags |= NAttrib::kWinAttribReadOnly;
     else if (c == L'a')
-      flags |= FILE_ATTRIBUTE_ARCHIVE;
+      flags |= NAttrib::kWinAttribArchive;
     else if (c == L's')
-      flags |= FILE_ATTRIBUTE_SYSTEM;
+      flags |= NAttrib::kWinAttribSystem;
     else if (c == L'h')
-      flags |= FILE_ATTRIBUTE_HIDDEN;
+      flags |= NAttrib::kWinAttribHidden;
     else if (c == L'i')
-      flags |= FILE_ATTRIBUTE_NOT_CONTENT_INDEXED;
+      flags |= NAttrib::kWinAttribNotIndexed;
     else
       return E_INVALIDARG;
   }
@@ -646,6 +686,7 @@ static const CHeaderTypePair kSetPropTypePairs[] =
   { NHeaderPropName::kFileAttrib, NSetPropType::kFileAttrib },
   { NHeaderPropName::kFilePermissions, NSetPropType::kFilePermissions },
   { NHeaderPropName::kFileOwnership, NSetPropType::kFileOwnership },
+  { NHeaderPropName::kDataDescriptor, NSetPropType::kDataDescriptor },
   { NHeaderPropName::kExtendedData, NSetPropType::kCopyExtraAll },
   { NHeaderPropName::kExtendedDataAdded, NSetPropType::kExtraAddedID },
   { NHeaderPropName::kExtendedDataDeleted, NSetPropType::kExtraDeletedID }
@@ -705,7 +746,7 @@ STDMETHODIMP CHandler::SetHeaderProperties(const wchar_t * const *names, const H
           RINOK(SetHeaderType(param.bstrVal, kFileInfoTypePairs, ARRAY_SIZE(kFileInfoTypePairs), m_HeaderFileInfoType));
           break;
         case NSetPropType::kFileInfoIzMode:
-          RINOK(PROPVARIANT_to_bool(param, m_HeaderInfo.SetIzAttrib));
+          RINOK(PROPVARIANT_to_bool(param, m_HeaderIzMode));
           if (m_HeaderTimeType == NTimeType::kDefault)
             m_HeaderTimeType = NTimeType::kUnixTimeExtra;
           if (m_HeaderInfo.CopyUnixFileOwnership)
@@ -739,6 +780,10 @@ STDMETHODIMP CHandler::SetHeaderProperties(const wchar_t * const *names, const H
           else
             RINOK(PROPVARIANT_to_bool(param, m_HeaderInfo.SetUnixFileOwnership));
           m_HeaderInfo.CopyUnixFileOwnership = false;
+          break;
+        case NSetPropType::kDataDescriptor:
+          RINOK(PROPVARIANT_to_bool(param, m_HeaderUseDescriptor.Val));
+          m_HeaderUseDescriptor.Def = true;
           break;
         case NSetPropType::kCopyExtraAll:
           RINOK(PROPVARIANT_to_bool(param, m_HeaderInfo.CopyExtraAll));

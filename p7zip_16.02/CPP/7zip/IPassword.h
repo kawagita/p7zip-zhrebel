@@ -20,4 +20,21 @@ PASSWORD_INTERFACE(ICryptoGetTextPassword2, 0x11)
   STDMETHOD(CryptoGetTextPassword2)(Int32 *passwordIsDefined, BSTR *password) PURE;
 };
 
+namespace NUpdateAnswer
+{
+  enum EEnum
+  {
+    kYes,
+    kYesToAll,
+    kNo,
+    kNoToAll,
+    kCancel
+  };
+}
+
+PASSWORD_INTERFACE(ICryptoAskHeaderChange, 0x12)
+{
+  STDMETHOD(CryptoAskHeaderChange)(const wchar_t *name, const FILETIME *time, Int32 *answer) PURE;
+};
+
 #endif

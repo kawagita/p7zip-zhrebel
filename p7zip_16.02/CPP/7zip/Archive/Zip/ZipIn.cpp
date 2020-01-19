@@ -605,6 +605,9 @@ void CInArchive::ReadFileName(unsigned size, AString &s)
 
 
 bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
+    #ifdef ZIP_HEADER_REBEL
+    bool &isZip64,
+    #endif
     UInt64 &unpackSize, UInt64 &packSize, UInt64 &localHeaderOffset, UInt32 &diskStartNumber)
 {
   extraBlock.Clear();
@@ -633,6 +636,9 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
           Skip(remain);
           return false;
         }
+        #ifdef ZIP_HEADER_REBEL
+        isZip64 = true;
+        #endif
         unpackSize = ReadUInt64();
         remain -= 8;
         dataSize -= 8;
@@ -641,6 +647,9 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
       {
         if (dataSize < 8)
           break;
+        #ifdef ZIP_HEADER_REBEL
+        isZip64 = true;
+        #endif
         packSize = ReadUInt64();
         remain -= 8;
         dataSize -= 8;
@@ -649,6 +658,9 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
       {
         if (dataSize < 8)
           break;
+        #ifdef ZIP_HEADER_REBEL
+        isZip64 = true;
+        #endif
         localHeaderOffset = ReadUInt64();
         remain -= 8;
         dataSize -= 8;
@@ -657,6 +669,9 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
       {
         if (dataSize < 4)
           break;
+        #ifdef ZIP_HEADER_REBEL
+        isZip64 = true;
+        #endif
         diskStartNumber = ReadUInt32();
         remain -= 4;
         dataSize -= 4;
@@ -721,8 +736,11 @@ bool CInArchive::ReadLocalItem(CItemEx &item)
   {
     UInt64 localHeaderOffset = 0;
     UInt32 diskStartNumber = 0;
-    if (!ReadExtra(extraSize, item.LocalExtra, item.Size, item.PackSize,
-        localHeaderOffset, diskStartNumber))
+    if (!ReadExtra(extraSize,item.LocalExtra,
+        #ifdef ZIP_HEADER_REBEL
+        item.IsZip64,
+        #endif
+        item.Size, item.PackSize, localHeaderOffset, diskStartNumber))
     {
       /* Most of archives are OK for Extra. But there are some rare cases
          that have error. And if error in first item, it can't open archive.
@@ -1019,7 +1037,11 @@ HRESULT CInArchive::ReadCdItem(CItemEx &item)
   ReadFileName(nameSize, item.Name);
   
   if (extraSize > 0)
-    ReadExtra(extraSize, item.CentralExtra, item.Size, item.PackSize, item.LocalHeaderPos, item.Disk);
+    ReadExtra(extraSize, item.CentralExtra,
+        #ifdef ZIP_HEADER_REBEL
+        item.IsZip64,
+        #endif
+        item.Size, item.PackSize, item.LocalHeaderPos, item.Disk);
 
   // May be these strings must be deleted
   /*

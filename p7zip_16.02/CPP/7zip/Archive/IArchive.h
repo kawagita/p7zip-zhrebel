@@ -400,9 +400,19 @@ SetOperationResult()
   Int32 opRes (NExtract::NOperationResult::kOK)
 */
 
+namespace NUpdateOpType
+{
+  enum
+  {
+    kChangeData = 0,
+    kChangeHeaderOnly,
+    kRename
+  };
+}
+
 struct CUpdateInfo
 {
-  UInt32 ChangeHeaderOnly;
+  UInt32 OpType;
   UInt32 PathStrippedSize;
   PROPVARIANT PathPrefix;
   PROPVARIANT Comment;

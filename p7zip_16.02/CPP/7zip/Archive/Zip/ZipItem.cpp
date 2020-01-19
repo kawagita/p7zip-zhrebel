@@ -270,9 +270,9 @@ UInt32 CItem::GetWinAttrib(
 {
   #ifdef ZIP_HEADER_REBEL
   if (fileInfoType == NFileInfoType::kWindows)
-    return ExternalAttrib & FILE_ATTRIBUTE_WIN_MASK;
+    return ExternalAttrib & NAttrib::kWinAttribMask;
   else if (fileInfoType == NFileInfoType::kUnix)
-    return ExternalAttrib & FILE_ATTRIBUTE_UNIX_MASK;
+    return ExternalAttrib & NAttrib::kUnixModeMask;
   else if (fileInfoType == NFileInfoType::kUnixWithAttrib)
     return ExternalAttrib;
   #endif

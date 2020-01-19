@@ -127,10 +127,6 @@ typedef __int64 INT64;
 #define FILE_ATTRIBUTE_ENCRYPTED            0x4000
 #define FILE_ATTRIBUTE_UNIX_EXTENSION       0x8000   /* trick for Unix */
 
-#define FILE_ATTRIBUTE_UNIX_MASK        0xFFFF0000
-#define FILE_ATTRIBUTE_WIN_MASK         (~(FILE_ATTRIBUTE_UNIX_MASK | \
-                                           FILE_ATTRIBUTE_UNIX_EXTENSION))
-
 /* END   <winerror.h> */
 
 #include <string.h>

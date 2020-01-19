@@ -121,7 +121,7 @@ void COutArchive::WriteExtra(const CExtraBlock &extra)
   }
 }
 
-void COutArchive::WriteCommonItemInfo(const CLocalItem &item, bool isZip64)
+void COutArchive::WriteCommonItemInfo(const CLocalItem &item, bool isZip64, bool toLocal)
 {
   {
     Byte ver = item.ExtractVersion.Version;
@@ -133,6 +133,11 @@ void COutArchive::WriteCommonItemInfo(const CLocalItem &item, bool isZip64)
   Write16(item.Flags);
   Write16(item.Method);
   Write32(item.Time);
+  #ifdef ZIP_HEADER_REBEL
+  if (toLocal && item.HasDescriptor() && !m_WriteHeaderIzMode)
+    Write32(0);
+  else
+  #endif
   Write32(item.Crc);
 }
 
@@ -147,10 +152,17 @@ void COutArchive::WriteLocalHeader(const CLocalItem &item)
       DOES_NEED_ZIP64(item.Size);
   
   Write32(NSignature::kLocalFileHeader);
-  WriteCommonItemInfo(item, isZip64);
+  WriteCommonItemInfo(item, isZip64, true);
 
-  WRITE_32_VAL_SPEC(item.PackSize, isZip64);
-  WRITE_32_VAL_SPEC(item.Size, isZip64);
+  #ifdef ZIP_HEADER_REBEL
+  if (item.HasDescriptor() && !m_WriteHeaderIzMode)
+    Write64(0);
+  else
+  #endif
+  {
+    WRITE_32_VAL_SPEC(item.PackSize, isZip64);
+    WRITE_32_VAL_SPEC(item.Size, isZip64);
+  }
 
   Write16((UInt16)item.Name.Len());
   {
@@ -177,6 +189,31 @@ void COutArchive::WriteLocalHeader(const CLocalItem &item)
   m_OutBuffer.FlushWithCheck();
   MoveCurPos(item.PackSize);
 }
+
+#ifdef ZIP_HEADER_REBEL
+void COutArchive::WriteDataDescriptor(const CLocalItem &item)
+{
+  bool isZip64 = m_IsZip64 ||
+      DOES_NEED_ZIP64(item.PackSize) ||
+      DOES_NEED_ZIP64(item.Size);
+
+  Write32(NSignature::kDataDescriptor);
+  Write32(item.Crc);
+
+  if (isZip64)
+  {
+    Write64(item.PackSize);
+    Write64(item.Size);
+  }
+  else
+  {
+    Write32(item.PackSize);
+    Write32(item.Size);
+  }
+
+  m_OutBuffer.FlushWithCheck();
+}
+#endif
 
 void COutArchive::WriteCentralHeader(const CItemOut &item)
 {
@@ -207,6 +244,11 @@ void COutArchive::WriteCentralHeader(const CItemOut &item)
   Write16((UInt16)item.Comment.Size());
   Write16(0); // DiskNumberStart;
   Write16(item.InternalAttrib);
+  #ifdef ZIP_HEADER_REBEL
+  if (m_WriteHeaderIzMode)
+    Write32(item.ExternalAttrib & NFileHeader::NAttrib::kWinAttribIzModeMask);
+  else
+  #endif
   Write32(item.ExternalAttrib);
   WRITE_32_VAL_SPEC(item.LocalHeaderPos, isPosition64);
   WriteBytes((const char *)item.Name, item.Name.Len());

@@ -36,6 +36,7 @@ struct CUpdateItem
   bool UnixTimeIsDefined;
   bool UnixAcTimeIsDefined;
   bool UnixCrTimeIsDefined;
+  bool UseDescriptor;
   #endif
   bool IsUtf8;
   int IndexInArc;
@@ -58,8 +59,11 @@ struct CUpdateItem
       UnixTimeIsDefined(false),
       UnixAcTimeIsDefined(false),
       UnixCrTimeIsDefined(false),
+      UseDescriptor(false),
       #endif
       IsUtf8(false),
+      UID(0),
+      GID(0),
       Size(0)
       {}
 };
@@ -72,7 +76,7 @@ HRESULT Update(
     CInArchive *inArchive, bool removeSfx,
     CCompressionMethodMode *compressionMethodMode,
     #ifdef ZIP_HEADER_REBEL
-    CHeaderRebel *headerRebel,
+    CHeaderRebel *headerRebel, bool headerIzMode,
     #endif
     IArchiveUpdateCallback *updateCallback);
 

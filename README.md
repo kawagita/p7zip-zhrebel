@@ -63,8 +63,12 @@ Specifies the header information.
   -h<header_parameters>
 ```
 
+**Notes:** "Default value" in switches descriptions means the value that will be used if switch is not specified.<br>
+It's allowed to use reduced forms for boolean switches: **sw+** or **sw** instead **sw=on**, and **sw-** instead of **sw=off**.
+
 | Parameter                                          |  Default  | Description                                              |
 | :------------------------------------------------- | :-------: | :------------------------------------------------------- |
+| init=[off \| on]                                   |  off[^1]  | Initializes file information for setting by p7zip.       |
 |[lc={Locale}](#lc)                                  |   UTF-8   | Encodes and decodes filename or comment for Locale.      |
 |[en={Locale}](#lc)                                  |   UTF-8   | Encodes filename or comment for locale.                  |
 |[de={Locale}](#lc)                                  |   UTF-8   | Decodes filename or comment for locale.                  |
@@ -82,6 +86,7 @@ Specifies the header information.
 | uid={NumUID}                                       |    [^2]   | Sets file ownership to number of Unix UID.               |
 | gid={NumGID}                                       |    [^2]   | Sets file ownership to number of Unix GID.               |
 | own=[off \| on]                                    |    off    | Stores file Ownership field to headers.                  |
+| dd=[off \| on]                                     |    off    | Stores data descriptor which follows compressed data.    |
 | ex=[off \| on]                                     |    off    | Leaves all Extra fields in headers.                      |
 |[exa={HeaderID(s)}](#exa)                           |    [^3]   | Leaves Extra field of header ID(s) in headers.           |
 |[exd={HeaderID(s)}](#exa)                           |    [^3]   | Removes Extra field of header ID(s) from headers.        |

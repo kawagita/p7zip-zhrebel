@@ -14,6 +14,17 @@
 #include "../Common/UpdateProduce.h"
 
 #include "OpenArchive.h"
+#include "UpdateMode.h"
+
+namespace NCryptoUpdateMode
+{
+  enum EEnum
+  {
+    kAsk,
+    kForce,
+    kSkip
+  };
+}
 
 #define INTERFACE_IUpdateCallbackUI(x) \
   virtual HRESULT WriteSfx(const wchar_t *name, UInt64 size) x; \
@@ -33,6 +44,7 @@
   /* virtual HRESULT SetPassword(const UString &password) x; */ \
   virtual HRESULT CryptoGetTextPassword2(Int32 *passwordIsDefined, BSTR *password) x; \
   virtual HRESULT CryptoGetTextPassword(BSTR *password) x; \
+  virtual HRESULT CryptoAskHeaderChange(const wchar_t *name, const FILETIME *time, Int32 *answer) x; \
   virtual HRESULT ShowDeleteFile(const wchar_t *name, bool isDir) x; \
   /* virtual HRESULT CloseProgress() { return S_OK; } */
 
@@ -64,6 +76,7 @@ class CArchiveUpdateCallback:
   public IArchiveGetRootProps,
   public ICryptoGetTextPassword2,
   public ICryptoGetTextPassword,
+  public ICryptoAskHeaderChange,
   public ICompressProgressInfo,
   public IInFileStream_Callback,
   public CMyUnknownImp
@@ -84,6 +97,7 @@ public:
     MY_QUERYINTERFACE_ENTRY(IArchiveGetRootProps)
     MY_QUERYINTERFACE_ENTRY(ICryptoGetTextPassword2)
     MY_QUERYINTERFACE_ENTRY(ICryptoGetTextPassword)
+    MY_QUERYINTERFACE_ENTRY(ICryptoAskHeaderChange)
     MY_QUERYINTERFACE_ENTRY(ICompressProgressInfo)
   MY_QUERYINTERFACE_END
   MY_ADDREF_RELEASE
@@ -99,6 +113,7 @@ public:
 
   STDMETHOD(CryptoGetTextPassword2)(Int32 *passwordIsDefined, BSTR *password);
   STDMETHOD(CryptoGetTextPassword)(BSTR *password);
+  STDMETHOD(CryptoAskHeaderChange)(const wchar_t *name, const FILETIME *time, Int32 *answer);
 
   CRecordVector<UInt32> _openFiles_Indexes;
   FStringVector _openFiles_Paths;
@@ -130,10 +145,12 @@ public:
   bool StoreHardLinks;
   bool StoreSymLinks;
 
-  bool ChangeHeaderOnly;
+  UInt32 OpType;
   UInt32 PathStrippedSize;
   UString PathPrefix;
   UString Comment;
+
+  NUpdate::NHeaderChangeMode::EEnum HeaderChangeMode;
 
   Byte *ProcessedItemsStatuses;
 

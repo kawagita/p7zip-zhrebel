@@ -425,15 +425,16 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
     #ifdef ZIP_HEADER_REBEL
     case kpidExtra:
     {
-      AString m;
       const CObjectVector<CExtraSubBlock> &subBlocks = extra.SubBlocks;
+      AString m;
+      if (item.IsZip64)
+        m += "ZIP64";
       FOR_VECTOR (i, subBlocks)
       {
         const CExtraSubBlock &sb = subBlocks[i];
         UInt16 id = sb.ID;
-        if (id == NFileHeader::NExtraID::kZip64)
-          m += "ZIP64";
-        else if (id == NFileHeader::NExtraID::kNTFS)
+        m.Add_Space_if_NotEmpty();
+        if (id == NFileHeader::NExtraID::kNTFS)
           m += "NTFS";
         else if (id == NFileHeader::NExtraID::kStrongEncrypt)
           m += kMethod_StrongCrypto;
@@ -454,7 +455,6 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
               m += (char)('a' + b);
           }
         }
-        m.Add_Space_if_NotEmpty();
       }
       prop = m;
       break;
@@ -680,6 +680,9 @@ struct CMethodItem
 
 class CZipDecoder
 {
+  #ifdef ZIP_HEADER_REBEL
+  CBoolPair _zipCryptoUseDescriptor;
+  #endif
   NCrypto::NZip::CDecoder *_zipCryptoDecoderSpec;
   NCrypto::NZipStrong::CDecoder *_pkAesDecoderSpec;
   NCrypto::NWzAes::CDecoder *_wzAesDecoderSpec;
@@ -694,7 +697,14 @@ class CZipDecoder
   CObjectVector<CMethodItem> methodItems;
 
 public:
-  CZipDecoder():
+  CZipDecoder(
+      #ifdef ZIP_HEADER_REBEL
+      CBoolPair useDescriptor
+      #endif
+      ):
+      #ifdef ZIP_HEADER_REBEL
+      _zipCryptoUseDescriptor(useDescriptor),
+      #endif
       _zipCryptoDecoderSpec(0),
       _pkAesDecoderSpec(0),
       _wzAesDecoderSpec(0),
@@ -1017,9 +1027,14 @@ HRESULT CZipDecoder::Decode(
 
           // UInt32 v1 = GetUi16(_zipCryptoDecoderSpec->_header + NCrypto::NZip::kHeaderSize - 2);
           // UInt32 v2 = (item.HasDescriptor() ? (item.Time & 0xFFFF) : (item.Crc >> 16));
+          bool useDescriptor = item.HasDescriptor();
+          #ifdef ZIP_HEADER_REBEL
+          if (_zipCryptoUseDescriptor.Def)
+            useDescriptor = _zipCryptoUseDescriptor.Val;
+          #endif
 
           Byte v1 = _zipCryptoDecoderSpec->_header[NCrypto::NZip::kHeaderSize - 1];
-          Byte v2 = (Byte)(item.HasDescriptor() ? (item.Time >> 8) : (item.Crc >> 24));
+          Byte v2 = (Byte)(useDescriptor ? (item.Time >> 8) : (item.Crc >> 24));
 
           if (v1 != v2)
           {
@@ -1089,7 +1104,11 @@ STDMETHODIMP CHandler::Extract(const UInt32 *indices, UInt32 numItems,
     Int32 testMode, IArchiveExtractCallback *extractCallback)
 {
   COM_TRY_BEGIN
-  CZipDecoder myDecoder;
+  CZipDecoder myDecoder
+      #ifdef ZIP_HEADER_REBEL
+      (m_HeaderUseDescriptor)
+      #endif
+      ;
   UInt64 totalUnPacked = 0, totalPacked = 0;
   bool allFilesMode = (numItems == (UInt32)(Int32)-1);
   if (allFilesMode)

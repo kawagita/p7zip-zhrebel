@@ -80,12 +80,13 @@ struct CRenamePair
   bool GetNewPath(bool isFolder, const UString &src, UString &dest) const;
 };
 
-namespace NHeaderChangedMode { enum EEnum
+namespace NHeaderChangedTarget { enum EEnum
 {
-  kSetCensorPathHeader,
-  kSetDirectoryHeaderOnly,
-  kSetFileHeaderOnly,
-  kSetAllHeaders
+  kNone,
+  kCensorPath,
+  kDirectory,
+  kFile,
+  kAll
 };}
 
 struct CUpdateOptions
@@ -125,8 +126,8 @@ struct CUpdateOptions
   UString PathPrefix;
   UString Comment;
 
-  bool HeaderChangedOnly;
-  NHeaderChangedMode::EEnum HeaderChangedMode;
+  NHeaderChangedTarget::EEnum HeaderChangedTarget;
+  NUpdate::NHeaderChangeMode::EEnum HeaderChangeMode;
 
   bool SetArcMTime;
 
@@ -149,8 +150,8 @@ struct CUpdateOptions
     DeleteAfterCompressing(false),
     DeleteAfterPathStripped(false),
     PathStrippedSize(0),
-    HeaderChangedOnly(false),
-    HeaderChangedMode(NHeaderChangedMode::kSetCensorPathHeader),
+    HeaderChangedTarget(NHeaderChangedTarget::kNone),
+    HeaderChangeMode(NUpdate::NHeaderChangeMode::kAsk),
     SetArcMTime(false)
 
       {};

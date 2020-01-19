@@ -76,6 +76,7 @@
 
   10 ICryptoGetTextPassword
   11 ICryptoGetTextPassword2
+  12 ICryptoAskHeaderChange
 
 
 06 IArchive.h

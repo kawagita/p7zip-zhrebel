@@ -5,6 +5,7 @@
 #include "../../../Common/IntToString.h"
 
 #include "../../../Windows/ErrorMsg.h"
+#include "../../../Windows/PropVariantConv.h"
 
 #ifndef _7ZIP_ST
 #include "../../../Windows/Synchronization.h"
@@ -668,6 +669,51 @@ HRESULT CUpdateCallbackConsole::CryptoGetTextPassword(BSTR *password)
   return StringToBstr(Password, password);
   
   #endif
+  COM_TRY_END
+}
+
+
+static const char *kTab = "  ";
+
+static void PrintFileInfo(CStdOutStream *_so, const wchar_t *path, const FILETIME *ft)
+{
+  *_so << kTab << "Path:     " << path << endl;
+  if (ft)
+  {
+    char temp[64];
+    FILETIME locTime;
+    if (FileTimeToLocalFileTime(ft, &locTime))
+      if (ConvertFileTimeToString(locTime, temp, true, true))
+        *_so << kTab << "Modified: " << temp << endl;
+  }
+}
+
+HRESULT CUpdateCallbackConsole::CryptoAskHeaderChange(const wchar_t *name, const FILETIME *time, Int32 *answer)
+{
+  COM_TRY_BEGIN
+  
+  ClosePercents2();
+  
+  if (_so)
+  {
+    *_so << "Would you like to change the header of Encrypted Data: " << endl;
+    PrintFileInfo(_so, name, time);
+  }
+  
+  switch (ScanUserYesNoAllQuit(_so, false))
+  {
+    case NUserAnswerMode::kQuit:  return E_ABORT;
+    case NUserAnswerMode::kNo:     *answer = NUpdateAnswer::kNo; break;
+    case NUserAnswerMode::kNoAll:  *answer = NUpdateAnswer::kNoToAll; break;
+    case NUserAnswerMode::kYesAll: *answer = NUpdateAnswer::kYesToAll; break;
+    case NUserAnswerMode::kYes:    *answer = NUpdateAnswer::kYes; break;
+    default: return E_FAIL;
+  }
+  
+  if (_so)
+    _so->Flush();
+  
+  return S_OK;
   COM_TRY_END
 }
 

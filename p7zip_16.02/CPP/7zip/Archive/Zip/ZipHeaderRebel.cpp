@@ -150,7 +150,6 @@ CHeaderRebel::CHeaderRebel(
   umask(mask);
   _UnixModeMask = ~mask;
   m_SetTimestampFromModTime = headerInfo.SetTimestampFromModTime;
-  m_SetIzAttrib = headerInfo.SetIzAttrib;
   m_SetUnixModeBits = headerInfo.SetUnixModeBits;
   m_SetUnixFileOwnership = headerInfo.SetUnixFileOwnership;
   m_CopyUnixFileOwnership = headerInfo.CopyUnixFileOwnership;
@@ -284,7 +283,7 @@ void CHeaderRebel::ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraS
       if ((mode & (~MY_LIN_S_IFMT)) == 0)
       {
         mode = kReadPermissionBits;
-        if ((attrib & FILE_ATTRIBUTE_READONLY) == 0)
+        if ((attrib & NAttrib::kWinAttribReadOnly) == 0)
           mode |= kWritePermissionBits;
         if (item.IsDir())
           mode |= MY_LIN_S_IFDIR | kExecutePermissionBits;
@@ -296,24 +295,22 @@ void CHeaderRebel::ChangeLocalHeader(CItemOut &item, CHeaderExtraStorage &extraS
         mode &= MY_LIN_S_IFMT;  // set only bits except for file or device type
       mode |= m_UnixModeBits;
       if (m_SetUnixFileOwnership)
-        extraStorage.SetUnixFileOwnershipExtra(item.UID, item.GID);
+        extraStorage.SetUnixFileOwnershipExtra();
       break;
   }
   if (changeAttrib)
   {
     if (item.IsDir())
-      attrib |= FILE_ATTRIBUTE_DIRECTORY;
-    else if ((attrib & FILE_ATTRIBUTE_WIN_MASK) == 0)
-      attrib |= FILE_ATTRIBUTE_NORMAL;
+      attrib |= NAttrib::kWinAttribDirectory;
+    else if ((attrib & NAttrib::kWinAttribMask) == 0)
+      attrib |= NAttrib::kWinAttribNormal;
     if (m_FileInfoType == NFileInfoType::kWindows)
       mode = 0;
     else if (m_FileInfoType == NFileInfoType::kUnixWithAttrib)
-      attrib |= FILE_ATTRIBUTE_UNIX_EXTENSION;
+      attrib |= NAttrib::kWinAttribUnixExtension;
   }
   else if (m_FileInfoType == NFileInfoType::kUnix)
     attrib = 0;
-  if (m_SetIzAttrib)
-    attrib &= ~(FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_UNIX_EXTENSION);
   item.ExternalAttrib = attrib | ((UInt32)mode << 16);
 }
 

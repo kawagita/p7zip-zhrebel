@@ -22,7 +22,13 @@ private:
   CExtraBlock m_CentralExtraUnknown;
 
 public:
-  CHeaderExtraStorage(): m_StoreUnixFileOwnershipField(false), m_HasWzAesField(false) {}
+  CHeaderExtraStorage(UInt32 uid, UInt32 gid)
+  {
+    m_UnixFileOwnershipField.OwnerIDs[OWNER_UID] = uid;
+    m_UnixFileOwnershipField.OwnerIDs[OWNER_GID] = gid;
+    m_StoreUnixFileOwnershipField = false;
+    m_HasWzAesField = false;
+  }
 
   UInt32 GetLocalExtraSize(const CItemOut &item) const;
 
@@ -35,10 +41,8 @@ public:
     }
   }
 
-  void SetUnixFileOwnershipExtra(UInt32 uid, UInt32 gid)
+  void SetUnixFileOwnershipExtra()
   {
-    m_UnixFileOwnershipField.OwnerIDs[OWNER_UID] = uid;
-    m_UnixFileOwnershipField.OwnerIDs[OWNER_GID] = gid;
     m_StoreUnixFileOwnershipField = true;
   }
 
@@ -62,7 +66,6 @@ private:
   mode_t _UnixModeMask;
 
   bool m_SetTimestampFromModTime;
-  bool m_SetIzAttrib;
   bool m_SetUnixModeBits;
   bool m_SetUnixFileOwnership;
   bool m_CopyUnixFileOwnership;

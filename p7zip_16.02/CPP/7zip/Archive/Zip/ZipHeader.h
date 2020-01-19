@@ -170,6 +170,21 @@ namespace NFileHeader
   }
 
   #ifdef ZIP_HEADER_REBEL
+  namespace NAttrib
+  {
+    const UInt32 kUnixModeMask           = 0xFFFF0000;
+    const UInt32 kWinAttribReadOnly      = FILE_ATTRIBUTE_READONLY;
+    const UInt32 kWinAttribArchive       = FILE_ATTRIBUTE_ARCHIVE;
+    const UInt32 kWinAttribSystem        = FILE_ATTRIBUTE_SYSTEM;
+    const UInt32 kWinAttribHidden        = FILE_ATTRIBUTE_HIDDEN;
+    const UInt32 kWinAttribNotIndexed    = FILE_ATTRIBUTE_NOT_CONTENT_INDEXED;
+    const UInt32 kWinAttribDirectory     = FILE_ATTRIBUTE_DIRECTORY;
+    const UInt32 kWinAttribNormal        = FILE_ATTRIBUTE_NORMAL;
+    const UInt32 kWinAttribUnixExtension = FILE_ATTRIBUTE_UNIX_EXTENSION;
+    const UInt32 kWinAttribMask          = ~(kUnixModeMask | kWinAttribUnixExtension);
+    const UInt32 kWinAttribIzModeMask    = ~(kWinAttribNormal | kWinAttribUnixExtension);
+  }
+
   namespace NTimeType
   {
     enum
@@ -211,6 +226,7 @@ namespace NFileHeader
       kFileAttrib,
       kFilePermissions,
       kFileOwnership,
+      kDataDescriptor,
       kCopyExtraAll,
       kExtraAddedID,
       kExtraDeletedID
@@ -222,12 +238,14 @@ namespace NFileHeader
 #ifdef ZIP_HEADER_REBEL
 struct CFileHeaderInfo
 {
-  UInt16 AttribFlags[ATTR_PARSIZE];
-  UInt16 UnixModeBits;
+  const UInt32 ProcUserID;
+  const UInt32 ProcGroupID;
+
+  UInt32 AttribFlags[ATTR_PARSIZE];
+  UInt32 UnixModeBits;
   UInt32 UnixUID;
   UInt32 UnixGID;
   bool SetTimestampFromModTime;
-  bool SetIzAttrib;
   bool SetUnixModeBits;
   bool SetUnixUID;
   bool SetUnixGID;
@@ -242,16 +260,22 @@ struct CFileHeaderInfo
     for (unsigned i = 0; i < ATTR_PARSIZE; i++)
       AttribFlags[i] = 0;
     UnixModeBits = 0;
-    UnixUID = getuid();
-    UnixGID = getgid();
+    UnixUID = 0;
+    UnixGID = 0;
     SetTimestampFromModTime = false;
-    SetIzAttrib = false;
     SetUnixModeBits = false;
+    SetUnixUID = false;
+    SetUnixGID = false;
     SetUnixFileOwnership = false;
     CopyUnixFileOwnership = true;
     CopyExtraAll = false;
     ExtraAddedIDs.Clear();
     ExtraDeletedIDs.Clear();
+  }
+
+  CFileHeaderInfo(): ProcUserID(getuid()), ProcGroupID(getgid())
+  {
+    InitHeaderInfo();
   }
 };
 #endif

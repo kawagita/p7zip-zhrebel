@@ -9,6 +9,7 @@ namespace NUserAnswerMode {
 
 enum EEnum
 {
+  kUnknown = 0,
   kYes,
   kNo,
   kYesAll,
@@ -18,7 +19,7 @@ enum EEnum
 };
 }
 
-NUserAnswerMode::EEnum ScanUserYesNoAllQuit(CStdOutStream *outStream);
+NUserAnswerMode::EEnum ScanUserYesNoAllQuit(CStdOutStream *outStream, bool rename = true);
 UString GetPassword(CStdOutStream *outStream,bool verify = false);
 
 #endif

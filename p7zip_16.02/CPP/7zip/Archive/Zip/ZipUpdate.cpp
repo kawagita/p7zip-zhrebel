@@ -43,7 +43,7 @@ static const Byte kHostOS =
   #endif
 
 static const Byte kMadeByHostOS = kHostOS;
-static const Byte kExtractHostOS = 0;
+static const Byte kExtractHostOS = 0;  // the same as 7-Zip 19.00
 
 static const Byte kMethodForDirectory = NFileHeader::NCompressionMethod::kStored;
 
@@ -73,8 +73,6 @@ static void SetFileHeader(
     item.Name = ui.Name;
     item.SetUtf8(ui.IsUtf8);
     item.ExternalAttrib = ui.Attrib;
-    item.UID = ui.UID;
-    item.GID = ui.GID;
     item.Time = ui.Time;
     item.Ntfs_MTime = ui.Ntfs_MTime;
     item.Ntfs_ATime = ui.Ntfs_ATime;
@@ -84,6 +82,7 @@ static void SetFileHeader(
     item.UnixTimeIsDefined = ui.UnixTimeIsDefined;
     item.UnixAcTimeIsDefined = ui.UnixAcTimeIsDefined;
     item.UnixCrTimeIsDefined = ui.UnixCrTimeIsDefined;
+    item.SetDescriptorMode(ui.UseDescriptor);
     #endif
   }
   else
@@ -360,8 +359,10 @@ static HRESULT UpdateItemOldData(
 
   if (ui.NewProps)
   {
+    #ifndef ZIP_HEADER_REBEL
     if (item.HasDescriptor())
       return E_NOTIMPL;
+    #endif
     
     // use old name size.
     
@@ -372,8 +373,6 @@ static HRESULT UpdateItemOldData(
 
     // we keep ExternalAttrib and some another properties from old archive
     // item.ExternalAttrib = ui.Attrib;
-    item.UID = ui.UID;
-    item.GID = ui.GID;
 
     item.Name = ui.Name;
     item.SetUtf8(ui.IsUtf8);
@@ -386,8 +385,8 @@ static HRESULT UpdateItemOldData(
     item.UnixTimeIsDefined = ui.UnixTimeIsDefined;
     item.UnixAcTimeIsDefined = ui.UnixAcTimeIsDefined;
     item.UnixCrTimeIsDefined = ui.UnixCrTimeIsDefined;
+    item.SetDescriptorMode(ui.UseDescriptor);
     #else
-
     item.CentralExtra.RemoveUnknownSubBlocks();
     item.LocalExtra.RemoveUnknownSubBlocks();
     #endif
@@ -410,6 +409,14 @@ static HRESULT UpdateItemOldData(
     RINOK(CopyBlockToArchive(packStream, itemEx.PackSize, archive, progress));
 
     complexity += itemEx.PackSize;
+
+    #ifdef ZIP_HEADER_REBEL
+    if (item.HasDescriptor())
+    {
+      archive.WriteDataDescriptor(item);
+      complexity += kDataDescriptorSize;
+    }
+    #endif
   }
   else
   {
@@ -540,7 +547,7 @@ static HRESULT Update2St(
     CItemEx itemEx;
     CItemOut item;
     #ifdef ZIP_HEADER_REBEL
-    CHeaderExtraStorage extraStorage;
+    CHeaderExtraStorage extraStorage(ui.UID, ui.GID);
     #endif
 
     if (ui.IndexInArc >= 0)
@@ -629,6 +636,15 @@ static HRESULT Update2St(
         RINOK(updateCallback->SetOperationResult(NArchive::NUpdate::NOperationResult::kOK));
         unpackSizeTotal += item.Size;
         packSizeTotal += item.PackSize;
+
+        #ifdef ZIP_HEADER_REBEL
+        if (item.HasDescriptor())
+        {
+          archive.WriteDataDescriptor(item);
+          unpackSizeTotal += kDataDescriptorSize;
+          packSizeTotal += kDataDescriptorSize;
+        }
+        #endif
       }
     }
     else
@@ -934,7 +950,7 @@ static HRESULT Update2(
     CItemEx itemEx;
     CItemOut item;
     #ifdef ZIP_HEADER_REBEL
-    CHeaderExtraStorage extraStorage;
+    CHeaderExtraStorage extraStorage(ui.UID, ui.GID);
     #endif
     
     if (ui.IndexInArc >= 0)
@@ -1057,6 +1073,14 @@ static HRESULT Update2(
             continue;
           }
         }
+
+        #ifdef ZIP_HEADER_REBEL
+        if (item.HasDescriptor())
+        {
+          archive.WriteDataDescriptor(item);
+          complexity += kDataDescriptorSize;
+        }
+        #endif
       }
     }
     else
@@ -1303,7 +1327,7 @@ HRESULT Update(
     CInArchive *inArchive, bool removeSfx,
     CCompressionMethodMode *compressionMethodMode,
     #ifdef ZIP_HEADER_REBEL
-    CHeaderRebel *headerRebel,
+    CHeaderRebel *headerRebel, bool headerIzMode,
     #endif
     IArchiveUpdateCallback *updateCallback)
 {
@@ -1338,7 +1362,11 @@ HRESULT Update(
     RINOK(cacheStream->Init(outStreamReal));
   }
 
-  COutArchive outArchive;
+  COutArchive outArchive
+      #ifdef ZIP_HEADER_REBEL
+      (headerIzMode)
+      #endif
+      ;
   RINOK(outArchive.Create(outStream));
 
   if (inArchive)

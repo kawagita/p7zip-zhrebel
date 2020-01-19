@@ -32,18 +32,24 @@ static const char kQuit = 'q';
 static const char *kFirstQuestionMessage = "? ";
 static const char *kHelpQuestionMessage =
   "(Y)es / (N)o / (A)lways / (S)kip all / A(u)to rename all / (Q)uit? ";
+static const char *kHelpQuestionMessageWithoutRename =
+  "(Y)es / (N)o / (A)lways / (S)kip all / (Q)uit? ";
 
 // return true if pressed Quite;
 
-NUserAnswerMode::EEnum ScanUserYesNoAllQuit(CStdOutStream *outStream)
+NUserAnswerMode::EEnum ScanUserYesNoAllQuit(CStdOutStream *outStream, bool rename)
 {
-  if (outStream)
-    *outStream << kFirstQuestionMessage;
+  if (!outStream)
+    return NUserAnswerMode::kUnknown;
+  *outStream << kFirstQuestionMessage;
   for (;;)
   {
     if (outStream)
     {
-      *outStream << kHelpQuestionMessage;
+      if (rename)
+        *outStream << kHelpQuestionMessage;
+      else
+        *outStream << kHelpQuestionMessageWithoutRename;
       outStream->Flush();
     }
     AString scannedString = g_StdIn.ScanStringUntilNewLine();
@@ -55,7 +61,10 @@ NUserAnswerMode::EEnum ScanUserYesNoAllQuit(CStdOutStream *outStream)
         case kNo:     return NUserAnswerMode::kNo;
         case kYesAll: return NUserAnswerMode::kYesAll;
         case kNoAll:  return NUserAnswerMode::kNoAll;
-        case kAutoRenameAll: return NUserAnswerMode::kAutoRenameAll;
+        case kAutoRenameAll:
+          if (rename)
+            return NUserAnswerMode::kAutoRenameAll;
+          break;
         case kQuit:   return NUserAnswerMode::kQuit;
       }
   }
