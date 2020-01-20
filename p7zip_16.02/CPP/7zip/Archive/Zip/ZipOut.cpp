@@ -155,7 +155,7 @@ void COutArchive::WriteLocalHeader(const CLocalItem &item)
   WriteCommonItemInfo(item, isZip64, true);
 
   #ifdef ZIP_HEADER_REBEL
-  if (item.HasDescriptor() && !m_WriteHeaderIzMode)
+  if (!isZip64 && item.HasDescriptor() && !m_WriteHeaderIzMode)
     Write64(0);
   else
   #endif
