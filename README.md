@@ -28,6 +28,8 @@ Updates file headers in archive.
 
 By `uh` command, file data are not compressed but copied, and only header informations are updated. Headers which filename is specified at the tail of an archive name on command line are replaced in the same archive. However, `'*'` (in quotes) or no filename is put on the last, all directories or files are targeted.
 
+Never change the modification time of encrypted data by Info-ZIP or remove its data descriptor. If done, original file can not be extracted from an archive. This command asks to change such header, so that you must select to continue or not.
+
 **Notes**
 
 This command can't be used with `-u` switch.
@@ -77,7 +79,7 @@ It's allowed to use reduced forms for boolean switches: **sw+** or **sw** instea
 |[tm={Timestamp}](#tm)                               |    [^2]   | Sets Modification time to timestamp.                     |
 |[ta={Timestamp}](#tm)                               |    [^2]   | Sets Last accessed time to timestamp.                    |
 |[tc={Timestamp}](#tm)                               |    [^2]   | Sets Creation time to timestamp.                         |
-| tfm=[off \| on]                                    |    off    | Sets all times from last Modification time.              |
+| tfm=[off \| on]                                    |    off    | Sets all times from Modification time.                   |
 | tz=[[+\|-]hh:mm]                                   |   00:00   | Adjusts all times with a Time Zone.                      |
 |[f=[WIN \| UNIX \| BOTH]](#f)                       | (BOTH[^1])| Sets host system on which file information is compatible.|
 | iz=[off \| on]                                     |    off    | Sets file information with ownership field like Info-Zip.|

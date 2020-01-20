@@ -427,7 +427,7 @@ STDMETHODIMP CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
     {
       const CObjectVector<CExtraSubBlock> &subBlocks = extra.SubBlocks;
       AString m;
-      if (item.IsZip64)
+      if (item.HasLocalZip64Ex || item.HasCentralZip64Ex)
         m += "ZIP64";
       FOR_VECTOR (i, subBlocks)
       {

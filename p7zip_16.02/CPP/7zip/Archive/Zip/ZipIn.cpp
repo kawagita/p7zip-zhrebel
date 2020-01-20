@@ -606,7 +606,7 @@ void CInArchive::ReadFileName(unsigned size, AString &s)
 
 bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
     #ifdef ZIP_HEADER_REBEL
-    bool &isZip64,
+    bool &hasZip64Ex,
     #endif
     UInt64 &unpackSize, UInt64 &packSize, UInt64 &localHeaderOffset, UInt32 &diskStartNumber)
 {
@@ -637,7 +637,7 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
           return false;
         }
         #ifdef ZIP_HEADER_REBEL
-        isZip64 = true;
+        hasZip64Ex = true;
         #endif
         unpackSize = ReadUInt64();
         remain -= 8;
@@ -648,7 +648,7 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
         if (dataSize < 8)
           break;
         #ifdef ZIP_HEADER_REBEL
-        isZip64 = true;
+        hasZip64Ex = true;
         #endif
         packSize = ReadUInt64();
         remain -= 8;
@@ -659,7 +659,7 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
         if (dataSize < 8)
           break;
         #ifdef ZIP_HEADER_REBEL
-        isZip64 = true;
+        hasZip64Ex = true;
         #endif
         localHeaderOffset = ReadUInt64();
         remain -= 8;
@@ -670,7 +670,7 @@ bool CInArchive::ReadExtra(unsigned extraSize, CExtraBlock &extraBlock,
         if (dataSize < 4)
           break;
         #ifdef ZIP_HEADER_REBEL
-        isZip64 = true;
+        hasZip64Ex = true;
         #endif
         diskStartNumber = ReadUInt32();
         remain -= 4;
@@ -738,7 +738,7 @@ bool CInArchive::ReadLocalItem(CItemEx &item)
     UInt32 diskStartNumber = 0;
     if (!ReadExtra(extraSize,item.LocalExtra,
         #ifdef ZIP_HEADER_REBEL
-        item.IsZip64,
+        item.HasLocalZip64Ex,
         #endif
         item.Size, item.PackSize, localHeaderOffset, diskStartNumber))
     {
@@ -917,6 +917,9 @@ HRESULT CInArchive::ReadLocalItemAfterCdItem(CItemEx &item, bool &isAvail)
     if (!AreItemsEqual(localItem, item))
       return S_FALSE;
     item.LocalFullHeaderSize = localItem.LocalFullHeaderSize;
+    #ifdef ZIP_HEADER_REBEL
+    item.HasLocalZip64Ex = localItem.HasLocalZip64Ex;
+    #endif
     item.LocalExtra = localItem.LocalExtra;
     item.FromLocal = true;
   }
@@ -997,6 +1000,14 @@ HRESULT CInArchive::ReadLocalItemAfterCdItemFull(CItemEx &item)
       }
       else
       */
+      #ifdef ZIP_HEADER_REBEL
+      if (item.HasLocalZip64Ex)
+      {
+        packSize = ReadUInt64();
+        unpackSize = ReadUInt64();
+      }
+      else
+      #endif
       {
         packSize = ReadUInt32();
         unpackSize = ReadUInt32();
@@ -1039,7 +1050,7 @@ HRESULT CInArchive::ReadCdItem(CItemEx &item)
   if (extraSize > 0)
     ReadExtra(extraSize, item.CentralExtra,
         #ifdef ZIP_HEADER_REBEL
-        item.IsZip64,
+        item.HasCentralZip64Ex,
         #endif
         item.Size, item.PackSize, item.LocalHeaderPos, item.Disk);
 

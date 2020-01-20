@@ -188,8 +188,9 @@ static bool ParseFromTimestampFormat(const UString s, FILETIME &res)
     while (*p != 0)
     {
       unsigned sec;
-      if (!ParseWCharToNumber(*p++, sec))
+      if (!ParseWCharToNumber(*p, sec))
         return false;
+      p++;
     }
     dateTimeStr.DeleteFrom(secSeparatorPos);
     dateTimeLen = secSeparatorPos;
@@ -212,25 +213,28 @@ static bool ParseFromTimestampFormat(const UString s, FILETIME &res)
     {
       dt[i] *= 10;
       unsigned t;
-      if (dateTimeLen <= 0 || !ParseWCharToNumber(*p++, t))
+      if (dateTimeLen <= 0 || !ParseWCharToNumber(*p, t))
         return false;
       dt[i] += t;
       dateTimeLen--;
+      p++;
     }
     while (--len > 0);
   }
   if (dateTimeLen > 0)
   {
-    if (--dateTimeLen != kTimestampSecondsLength || *p++ != kTimestampISO8601TimeSeparator)
+    if (--dateTimeLen != kTimestampSecondsLength || *p != kTimestampISO8601TimeSeparator)
       return false;
+    p++;
     _100ns = seconds;
     seconds = 0;
     for (unsigned i = 0; i < dateTimeLen; i++)
     {
       seconds *= 10;
       unsigned sec;
-      if (!ParseWCharToNumber(*p++, sec))
+      if (!ParseWCharToNumber(*p, sec))
         return false;
+      p++;
       seconds += sec;
     }
   }
@@ -263,16 +267,18 @@ static bool ParseFromTimeZoneFormat(const UString s, Int32 &res)
   {
     if (i > 0)
     {
-      if (*p++ != kTimestampISO8601TimeSeparator)
+      if (*p != kTimestampISO8601TimeSeparator)
         return false;
+      p++;
     }
     unsigned time = 0;
     for (unsigned j = 0; j < kTimestampDigitLengths[kNumTimestampDateParts + i]; j++)
     {
       time *= 10;
       unsigned t;
-      if (!ParseWCharToNumber(*p++, t))
+      if (!ParseWCharToNumber(*p, t))
         return false;
+      p++;
       time += t;
     }
     offset = (offset + time) * 60;
@@ -319,11 +325,12 @@ static bool ParseFromFilePermissions(const UString s, UInt32 &res)
   const wchar_t *p = s.Ptr();
   UInt64 num = 0;
   UInt32 oct;
-  while (ParseWCharToNumber(*p++, oct, 8))
+  while (ParseWCharToNumber(*p, oct, 8))
   {
     num = (num << 3) + oct;
-    if (num > 0xFFFFFFFF)
+    if (num > (UInt32)0xFFFFFFFF)
       return false;
+    p++;
   }
   if (*p != 0)
     return false;
@@ -337,11 +344,12 @@ static bool ParseFromNumberFormat(const UString s, UInt32 &res, unsigned &len)
   UInt64 num = 0;
   UInt32 d;
   len = 0;
-  while (ParseWCharToNumber(*p++, d))
+  while (ParseWCharToNumber(*p, d))
   {
     num = num * 10 + d;
-    if (num > 0xFFFFFFFF)
+    if (num > (UInt32)0xFFFFFFFF)
       return false;
+    p++;
     len++;
   }
   res = num;
@@ -356,11 +364,12 @@ static bool ParseFromDataFormat(const UString s, UInt32 &res, unsigned &len)
     UInt64 num = 0;
     UInt32 hex;
     len = 2;
-    while (ParseWCharToNumber(*p++, hex, 16))
+    while (ParseWCharToNumber(*p, hex, 16))
     {
       num = (num << 4) + hex;
-      if (num > 0xFFFFFFFF)
+      if (num > (UInt32)0xFFFFFFFF)
         return false;
+      p++;
       len++;
     }
     res = num;

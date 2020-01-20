@@ -69,7 +69,7 @@ ZIPアーカイブは最後尾にファイル自体のコメントを格納す�
 
 #### ファイル名 フィールド （エンコード）
 
-ZIPアーカイブへファイルを追加する時にファイル名はバイトデータに変換してヘッダに格納されます。Windows用ソフトウェアと圧縮フォルダ―はCP932、DebianやCygwinのコマンドはUTF-8です。やはりCP932はもうしばらくWindowsの標準らしい……
+ZIPアーカイブへファイルを追加する時にファイル名はバイトデータに変換してヘッダに格納されます。Windows用ソフトウェアと圧縮フォルダ―はCP932、DebianやCygwinのコマンドはUTF-8です。やはりCP932はもうしばらくWindowsの標準なのでしょう。
 
 7-ZipではUTF-8とCP932に対応しています。GUI版の7zFMはパラメーター欄に`cu+`を入力すればUTF-8に変換でき、7zaコマンドは`-mcl+`スイッチを指定すれば現在のロケールに従います（Debianは不可）。さらに、7za-zhrebelコマンドは指定したロケールに変換できるようにしました。
 
@@ -126,7 +126,7 @@ Last mod file time:
 
 7-ZipはZIPアーカイブへファイルを追加する時に`Central directory header`の拡張フィールドへ`NTFS Extra Field`を追加します。この拡張ブロックはタイムスタンプの更新日時、アクセス日時、作成日時を100ナノ秒単位で格納可能です。
 
-Windows GUI版の7zFMはファイル時刻がそのまま使われますが、（UNIXのコードが元になっている）7zaコマンドでは秒単位になり、作成日時でなく状態変更時刻が格納されます。おまけに、その時刻はファイルを展開する時に復元されません。7za-zhrebelコマンドはCygwinでファイルの作成日時を取得し、`./build_install.sh`の実行時に`-nsec`を指定した場合にナノ秒が使われます。
+Windows GUI版の7zFMはファイル時刻がそのまま使われますが、（UNIXのコードが元になっている）7zaコマンドでは秒単位になり、作成日時でなく状態変更時刻が格納されます。おまけに、その時刻はファイルを展開する時に復元されません。7za-zhrebelコマンドはCygwinでファイルの作成日時を設定し、`./build_install.sh`の実行時に`-nsec`を指定した場合にナノ秒が使われます。
 
 |  Size   | Value    |                               |
 | :-----: | :------- | :---------------------------- |
@@ -138,6 +138,8 @@ Windows GUI版の7zFMはファイル時刻がそのまま使われますが、�
 | 8 bytes | Mtime    | 更新日時                      |
 | 8 bytes | Atime    | アクセス日時                  |
 | 8 bytes | Ctime    | 作成日時（7zaは状態変更時刻） |
+
+追記: FreeBSD/NetBSD/MacOS用のmakefileも変更しました。作成日時が設定されるはずですけど、コンパイルエラーが出た場合は`-DENV_HAVE_BIRTHTIME`の行を削除して下さい。
 
 #### 拡張タイムスタンプ
 
@@ -152,7 +154,7 @@ Local file header:
 | 2 bytes | 0x5455            | ヘッダID                       |
 | 2 bytes | 0x0009 (0x000d)   | データサイズ                   |
 | 1 byte  | 0x0003 (0x0007)   | 日時データが存在するかのフラグ |
-| 4 bytes | ModTime           | 更新日時                       |
+| 4 bytes | ModTime           | 更新日時（必須）               |
 | 4 bytes | AcTime            | アクセス日時                   |
 | 4 bytes | -------- (CrTime) | 作成日時（zip.exeのみ格納）    |
 
@@ -163,7 +165,7 @@ Central directory header:
 | 2 bytes | 0x5455          | ヘッダID                       |
 | 2 bytes | 0x0005          | データサイズ                   |
 | 1 byte  | 0x0003 (0x0007) | 日時データが存在するかのフラグ |
-| 4 bytes | ModTime         | 更新日時                       |
+| 4 bytes | ModTime         | 更新日時（必須）               |
 
 ## ZIPアーカイブにおけるファイル属性
 
@@ -201,10 +203,55 @@ Lower two bytes:
 
 Upper two bytes:
 
-| Bit allocation   |                                                        |
-| :--------------- | :----------------------------------------------------- |
-| 0000000000000111 | その他のファイルアクセス許可（chmodコマンドの8進値）   |
-| 0000000000111000 | グループのファイルアクセス許可（chmodコマンドの8進値） |
-| 0000000111000000 | 所有者のファイルアクセス許可（chmodコマンドの8進値）   |
-|    ......        |                                                        |
-| 1111000000000000 | ファイル種別（ディレクトリは4、ファイルは8）           |
+| Bit allocation   |                                                      |
+| :--------------- | :--------------------------------------------------- |
+| 0000000000000111 | その他のファイルアクセス許可（chmodコマンドの8進値） |
+| 0000000000111000 | グループのファイルアクセス許可（同上）               |
+| 0000000111000000 | 所有者のファイルアクセス許可（同上）                 |
+| 0000111000000000 | set-user/group-IDビット、スティッキービット（同上）  |
+| 1111000000000000 | ファイル種別（ディレクトリは4、ファイルは8）         |
+
+## ZIPアーカイブの64ビット対応と暗号化
+
+ZIPアーカイブで`Central directory`の開始位置（全ての`Local file header`と圧縮データの合計サイズ）が32ビットを超えると、`End of central directory record`の前に`Zip64 end of central director`と`Zip64 end of central director locator`が追加されます。「ZIP64」はPKWareの登録商標です。また、ファイルや圧縮データのサイズが32ビットを超えると、拡張フィールドに`ZIP64 Extended Information Extra Field`が追加されます。
+
+ファイルが暗号化されている場合、ヘッダで`general purpose bit flag`の１ビット目にフラグが立ちます。さらに、PKWareの強力な暗号化には６ビット目にフラグが設定され、AESには拡張フィールドにデータが追加されます。何もない時は[APPNOTE.TXT](https://www.pkware.com/documents/casestudies/APPNOTE.TXT)に書かれているTraditional PKWARE Encryptionです。
+
+#### ZIP64拡張情報 拡張フィールド
+
+`ZIP64 Extended Information Extra Field`はファイルヘッダでは４バイトしか格納できないサイズや位置のフィールドに８バイトを確保しています。この拡張ブロックには従来のフィールドに`0xFFFFFFFF`を設定したデータに対する実際の値が格納されます。
+
+Local file header:
+
+|  Size   | Value           |                            |
+| :-----: | :-------------- | :------------------------- |
+| 2 bytes | 0x0001          | ヘッダID                   |
+| 2 bytes | 0x0010          | データサイズ               |
+| 8 bytes | Original Size   | ファイルのサイズ（必須）   |
+| 8 bytes | Compressed Size | 圧縮データのサイズ（必須） |
+
+Central directory header:
+
+|  Size   | Value                    |                                |
+| :-----: | :----------------------- | :----------------------------- |
+| 2 bytes | 0x0001                   | ヘッダID                       |
+| 2 bytes | 0x0008 / 0x0010 / 0x0018 | データサイズ                   |
+| 8 bytes | Original Size            | ファイルのサイズ               |
+| 8 bytes | Compressed Size          | 圧縮データのサイズ             |
+| 8 bytes | Relative Header Offset   | Local file headerの開始位置    |
+| 4 bytes | Disk Start Number        | 開始ディスク（まず使われない） |
+
+#### データデスクリプター
+
+`Data Descriptor`は圧縮データの後に置かれるデータです。ZIPアーカイブを作成する時に一時ファイルを使わず、データをパイプ、デバイス、ネットワークなどへ直接流し込む場合、`Local file header`で`general purpose bit flag`の３ビット目にフラグを立て、`crc-32`、`compressed size`、`uncompressed size`に前もってゼロを格納します。これらのフィールドはファイルや標準入力からのデータを（出力しながら）圧縮した後にようやく値が設定でき、このデスクリプターに格納されます。
+
+さて、[APPNOTE.TXT](https://www.pkware.com/documents/casestudies/APPNOTE.TXT)で最初に`compressed size`や`uncompressed size`が4 bytesと表記されていますが、文章で32ビットを超える場合はZIP64形式で（８バイトとして）格納されるとの記述があり、ファイルヘッダに`ZIP64 Extended Information Extra Field`が必要です。つまり、圧縮後までサイズの決定を保留できる役割はZIP64で果たせなくなっています。
+
+7-Zipではまったく使われませんが、7za-zhrebelコマンドはデスクリプターを追加したり、削除したりできます。Info-ZIPではファイルを暗号化した時に追加され、これを削除するとデータを復号できなくなります。そうなった場合は7za-zhrebelで再び付け直すか、解凍の時に`-hdd+`を指定して下さい。くれぐれも更新日時を変えないように気を付けましょう。
+
+|     Size     | Value                  |                      |
+| :----------: | :--------------------- | :------------------- |
+| 4 bytes      | signature (0x08074b50) | "PK"から始まる識別子 |
+| 4 bytes      | crc-32                 | ファイルのCRC32値    |
+| 4 / 8 bytes  | compressed size        | 圧縮データのサイズ   |
+| 4 / 8 bytes  | uncompressed size      | ファイルのサイズ     |

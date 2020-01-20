@@ -22,9 +22,10 @@ class CItemEx: public CItem
 public:
   UInt32 LocalFullHeaderSize; // including Name and Extra
   #ifdef ZIP_HEADER_REBEL
-  bool IsZip64;
+  bool HasLocalZip64Ex;
+  bool HasCentralZip64Ex;
   
-  CItemEx(): IsZip64(false) {}
+  CItemEx(): HasLocalZip64Ex(false), HasCentralZip64Ex(false) {}
   #endif
   
   UInt64 GetLocalFullSize() const
@@ -249,7 +250,7 @@ class CInArchive
 
   bool ReadExtra(unsigned extraSize,CExtraBlock &extraBlock,
       #ifdef ZIP_HEADER_REBEL
-      bool &isZip64,
+      bool &hasZip64Ex,
       #endif
       UInt64 &unpackSize, UInt64 &packSize, UInt64 &localHeaderOffset, UInt32 &diskStartNumber);
   bool ReadLocalItem(CItemEx &item);
