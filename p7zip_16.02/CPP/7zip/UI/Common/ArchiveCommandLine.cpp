@@ -896,6 +896,7 @@ const wchar_t *kExtendedDataDeleted = L"exd";
 }
 
 static const wchar_t *kLocaleParamNames[] = { L"de", L"en" };
+static const wchar_t *kTimeZoneParamNames[] = { L"tzm", L"tza", L"tzc" };
 static const wchar_t *kTimestampParamNames[] = { L"tm", L"ta", L"tc" };
 static const wchar_t *kFileOwnershipParamNames[] = { L"uid", L"gid" };
 
@@ -905,7 +906,7 @@ static const CHeaderPropertyForm kHeaderPropertyForms[] =
   { NHeaderPropName::kLocale, HT_LOCALE, ARRAY_SIZE(kLocaleParamNames), kLocaleParamNames, HT_LOCALE },
   { NHeaderPropName::kDecodingComment, HT_LOCALE, 0 },
   { NHeaderPropName::kTimeType, HT_TIME_INFORMATION, 0 },
-  { NHeaderPropName::kTimeZone, HT_TIME_ZONE, 0 },
+  { NHeaderPropName::kTimeZone, HT_TIME_ZONE, ARRAY_SIZE(kTimeZoneParamNames), kTimeZoneParamNames, HT_TIME_ZONE },
   { NHeaderPropName::kTimestampFromModTime, HT_EXTENDED_DATA_SWITCH, 0 },
   { NHeaderPropName::kTimestamp, HT_NOTHING, ARRAY_SIZE(kTimestampParamNames), kTimestampParamNames, HT_TIMESTAMP },
   { NHeaderPropName::kFileInfoType, HT_FILE_INFORMATION, 0 },

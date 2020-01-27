@@ -81,6 +81,9 @@ It's allowed to use reduced forms for boolean switches: **sw+** or **sw** instea
 |[tc={Timestamp}](#tm)                               |    [^2]   | Sets Creation time to timestamp.                         |
 | tfm=[off \| on]                                    |    off    | Sets all times from Modification time.                   |
 | tz=[[+\|-]hh:mm]                                   |   00:00   | Adjusts all times with a Time Zone.                      |
+| tzm=[[+\|-]hh:mm]                                  |   00:00   | Adjusts Modification time with a Time Zone.              |
+| tza=[[+\|-]hh:mm]                                  |   00:00   | Adjusts Last accessed time with a Time Zone.             |
+| tzc=[[+\|-]hh:mm]                                  |   00:00   | Adjusts Creation time with a Time Zone.                  |
 |[f=[WIN \| UNIX \| BOTH]](#f)                       | (BOTH[^1])| Sets host system on which file information is compatible.|
 | iz=[off \| on]                                     |    off    | Sets file information with ownership field like Info-Zip.|
 |[attrib=[[+\|-][R \| A \| S \| H \| I]]...](#attrib)|    [^2]   | Sets or clears file Attribute of Windows.                |
